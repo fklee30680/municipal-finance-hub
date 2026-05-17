@@ -1,13 +1,16 @@
 import { createBrowserClient } from "@supabase/ssr";
 
+import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
+
 export function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+    throw new Error(
+      "Missing or invalid NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY."
+    );
   }
 
   return createBrowserClient(supabaseUrl, supabaseAnonKey);
 }
-

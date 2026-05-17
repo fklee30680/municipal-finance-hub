@@ -2,12 +2,19 @@ import "server-only";
 
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
+import {
+  getSupabaseServiceRoleKey,
+  getSupabaseUrl
+} from "@/lib/supabase/env";
+
 export function createAdminClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = getSupabaseUrl();
+  const serviceRoleKey = getSupabaseServiceRoleKey();
 
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
+    throw new Error(
+      "Missing or invalid NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY."
+    );
   }
 
   return createSupabaseClient(supabaseUrl, serviceRoleKey, {
@@ -17,4 +24,3 @@ export function createAdminClient() {
     }
   });
 }
-

@@ -1,8 +1,13 @@
 import { redirect } from "next/navigation";
 
+import { getSupabaseEnvIssue } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 export async function getCurrentUser() {
+  if (getSupabaseEnvIssue()) {
+    return null;
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
 
@@ -24,6 +29,10 @@ export async function requireUser() {
 }
 
 export async function getCurrentClaims() {
+  if (getSupabaseEnvIssue()) {
+    return null;
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getClaims();
 

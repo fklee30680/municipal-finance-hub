@@ -8,6 +8,12 @@ const migrationPath = join(
   "migrations",
   "20260517000100_core_schema.sql"
 );
+const setupMigrationPath = join(
+  root,
+  "supabase",
+  "migrations",
+  "20260517000200_setup_configuration.sql"
+);
 
 const requiredTables = [
   "organizations",
@@ -107,17 +113,80 @@ if (!existsSync(migrationPath)) {
   }
 }
 
+if (!existsSync(setupMigrationPath)) {
+  fail(`Missing setup migration: ${setupMigrationPath}`);
+} else {
+  const setupSql = readFileSync(setupMigrationPath, "utf8");
+
+  const setupSnippets = [
+    "create table if not exists public.organization_settings",
+    "organization_display_name text not null",
+    "current_fiscal_year text",
+    "fiscal_year_start_date date",
+    "fiscal_year_end_date date",
+    "standard_period_count integer not null default 12",
+    "enable_period_0 boolean not null default false",
+    "enable_period_13 boolean not null default false",
+    "enable_accrual_reporting boolean not null default false",
+    "default_report_period_mode text not null default 'standard'",
+    "organization_settings_report_period_mode_check",
+    "check (period between 0 and 13)",
+    "System Admin",
+    "Finance Admin",
+    "Importer",
+    "Reviewer",
+    "Approver",
+    "Viewer",
+    "Monthly Finance Report"
+  ];
+
+  for (const snippet of setupSnippets) {
+    if (!setupSql.includes(snippet)) {
+      fail(`Missing required setup migration content: ${snippet}`);
+    }
+  }
+}
+
 const requiredDocs = [
   "docs/product-spec.md",
   "docs/build-plan.md",
   "docs/architecture-decisions.md",
   "docs/database-schema.md",
+  "docs/fiscal-calendar.md",
   "TASKS.md"
 ];
 
 for (const doc of requiredDocs) {
   if (!existsSync(join(root, doc))) {
     fail(`Missing documentation file: ${doc}`);
+  }
+}
+
+const setupPagePath = join(root, "app", "settings", "setup", "page.tsx");
+if (!existsSync(setupPagePath)) {
+  fail("Missing setup page: app/settings/setup/page.tsx");
+} else {
+  const setupPage = readFileSync(setupPagePath, "utf8");
+  const setupPageLabels = [
+    "Setup Configuration",
+    "Organization Setup",
+    "Fiscal Year Setup",
+    "Reporting Period Options",
+    "Organization name",
+    "Current fiscal year",
+    "Fiscal year start date",
+    "Fiscal year end date",
+    "Standard period count",
+    "Period 0 enabled",
+    "Period 13 enabled",
+    "Accrual reporting enabled",
+    "Default report period mode"
+  ];
+
+  for (const label of setupPageLabels) {
+    if (!setupPage.includes(label)) {
+      fail(`Missing setup page label: ${label}`);
+    }
   }
 }
 

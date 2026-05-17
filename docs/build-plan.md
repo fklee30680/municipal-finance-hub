@@ -12,9 +12,13 @@ Slice 1 implementation creates the first Supabase core schema migration and a st
 
 Completion note: Slice 1 should remain pending in `TASKS.md` until `npm run lint`, `npm run typecheck`, `npm run build`, and migration validation can be run in an environment with `npm`, dependencies, and Supabase CLI available.
 
-## Slice 2: Authentication Foundation
+## Slice 2: Seed Data and Setup Configuration Foundation
 
-Wire Supabase Auth into the app shell and establish user attribution without building the full role workflow.
+Add organization-scoped setup configuration for display name, current fiscal year, fiscal year dates, standard period count, optional period 0, optional period 13, accrual reporting, and default report period mode. Confirm baseline roles, import types, account structure configuration, account segments, and a Monthly Finance Report shell remain seed data rather than hardcoded application logic.
+
+Slice 2 implementation creates `supabase/migrations/20260517000200_setup_configuration.sql`, adds a read-only Setup Configuration page under Settings, and documents fiscal calendar behavior. Editing, fiscal calendar imports, trial balance imports, dashboards, calculations, report generation, budget import, and AI commentary remain deferred.
+
+Completion note: Slice 2 should only be marked complete in `TASKS.md` after lint, typecheck, build, schema checks, and available Supabase validation pass.
 
 ## Slice 3: Import Template Foundations
 

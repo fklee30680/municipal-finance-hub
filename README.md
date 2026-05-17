@@ -3,6 +3,7 @@
 Municipal Finance Reporting Hub is a web-based reporting and analysis layer for municipal finance teams. It is intended to support configurable imports, raw file preservation, normalized financial storage, account parsing, mapping and classification, trend and variance analysis, dashboards, and recurring Monthly Finance Reports.
 
 The app is not an ERP replacement, accounting system of record, journal-entry system, audited financial statement generator, budget module, or AI commentary system in Slice 0.
+Budget import, budget-to-actual reporting, and AI commentary remain deferred beyond the current build slices.
 
 ## Technology Baseline
 
@@ -58,6 +59,8 @@ Slice 0 creates only the technical foundation:
 - Migration and fixtures folders.
 - Documentation and task tracking.
 
+Slice 2 adds a setup configuration foundation for organization and fiscal calendar settings. The setup page is read-only until later slices add safe editing workflows.
+
 Slice 0 intentionally does not implement imports, mappings, validation, finance calculations, dashboards, report generation, budget functionality, role workflows, or AI commentary.
 
 ## Documentation
@@ -67,6 +70,7 @@ Slice 0 intentionally does not implement imports, mappings, validation, finance 
 - `docs/codex-instructions.md`
 - `docs/architecture-decisions.md`
 - `docs/database-schema.md`
+- `docs/fiscal-calendar.md`
 - `TASKS.md`
 
 ## Deployment Target

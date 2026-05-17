@@ -32,3 +32,14 @@
 - Seed only baseline roles, import types, the City standard account structure, account segments, a report template shell, and a threshold shell.
 - Defer operational budget import and budget-to-actual tables until Phase 9.
 - Defer AI commentary tables and workflows.
+
+## Slice 2 Setup Configuration Decisions
+
+- Store fiscal calendar setup in organization-scoped configuration data through `organization_settings`.
+- Keep organization display name user-configurable instead of relying on application constants.
+- Keep current fiscal year, fiscal year start date, fiscal year end date, period 0, period 13, accrual reporting, and default report period mode configurable per organization.
+- Default normal monthly reporting to `standard`, which excludes period 0 and period 13.
+- Allow period 0 in the fiscal period table so later setup/import workflows can support opening or beginning-balance periods without a schema rewrite.
+- Do not seed fixed fiscal years or fiscal periods until the user configures or imports them.
+- Keep setup editing read-only in Slice 2; editable workflows should wait for settled auth, validation, and audit patterns.
+- Continue excluding operational budget import, budget-to-actual reporting, and AI commentary.

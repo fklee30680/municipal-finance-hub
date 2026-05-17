@@ -2,7 +2,7 @@
 
 - [ ] Slice 0: Project setup and technical foundation.
 - [ ] Slice 1: Data model draft. Schema migration implemented; pending npm/build and Supabase validation.
-- [ ] Slice 2: Authentication foundation.
+- [x] Slice 2: Seed data and setup configuration foundation. Local schema, lint, typecheck, and build checks passed; Supabase CLI validation unavailable locally.
 - [ ] Slice 3: Import template foundations.
 - [ ] Slice 4: Raw file preservation.
 - [ ] Slice 5: Trial balance import MVP.

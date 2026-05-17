@@ -6,6 +6,12 @@ Slice 1 adds the first production-style Supabase/PostgreSQL schema migration:
 supabase/migrations/20260517000100_core_schema.sql
 ```
 
+Slice 2 adds the setup configuration migration:
+
+```text
+supabase/migrations/20260517000200_setup_configuration.sql
+```
+
 ## Migration Scope
 
 The migration creates foundations for:
@@ -37,9 +43,26 @@ The migration seeds:
 - Default calculation threshold shell.
 - Monthly Finance Report template shell and version shell.
 
+Slice 2 confirms or adds:
+
+- Organization-scoped setup settings.
+- Baseline setup defaults for a bootstrap organization.
+- Baseline roles required by the setup foundation.
+- Baseline import types for trial balance and core mapping imports.
+- City Standard Account Structure and five account segment definitions as stored configuration.
+- Monthly Finance Report template shell configuration.
+
 ## Reporting Defaults
 
 Standard reporting should use active, posted, included imports. The migration creates `public.active_trial_balance_lines` as the default view for active posted actuals. Inactive and superseded import batches are excluded from that view.
+
+Slice 2 defaults report period mode to `standard`, which excludes optional period 0 and period 13 from normal monthly reporting.
+
+## Setup Configuration
+
+`organization_settings` stores the user-configurable organization display name, current fiscal year, fiscal year start and end dates, standard period count, optional period 0, optional period 13, accrual reporting, and default report period mode.
+
+The migration permits fiscal period `0` so later setup or import workflows can support opening and beginning-balance periods. Slice 2 does not seed fixed fiscal years or fiscal periods.
 
 ## Deferred
 
@@ -54,4 +77,3 @@ Slice 1 does not implement:
 - Monthly Finance Report generation.
 - Budget import or budget-to-actual reporting.
 - AI commentary.
-

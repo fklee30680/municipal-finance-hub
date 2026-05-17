@@ -43,6 +43,20 @@ export async function uploadSourceFile(
   _previousState: UploadSourceFileState,
   formData: FormData
 ): Promise<UploadSourceFileState> {
+  try {
+    return await uploadSourceFileInternal(formData);
+  } catch (error) {
+    return errorState(
+      error instanceof Error
+        ? error.message
+        : "Upload failed before it could be saved."
+    );
+  }
+}
+
+async function uploadSourceFileInternal(
+  formData: FormData
+): Promise<UploadSourceFileState> {
   const authUser = await getCurrentUser();
 
   if (!authUser) {

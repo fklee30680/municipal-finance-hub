@@ -50,6 +50,35 @@ export async function ensureAppUserForAuthUser(
     throw new Error("No active organization exists for upload attribution.");
   }
 
+  const existingEmailUser = await adminClient
+    .from("app_users")
+    .select("user_id, organization_id, email, display_name")
+    .eq("organization_id", organization.data.organization_id)
+    .eq("email", email)
+    .maybeSingle<AppUserRecord>();
+
+  if (existingEmailUser.error) {
+    throw new Error(existingEmailUser.error.message);
+  }
+
+  if (existingEmailUser.data) {
+    const linkedUser = await adminClient
+      .from("app_users")
+      .update({
+        auth_user_id: authUser.id,
+        last_login_at: new Date().toISOString()
+      })
+      .eq("user_id", existingEmailUser.data.user_id)
+      .select("user_id, organization_id, email, display_name")
+      .single<AppUserRecord>();
+
+    if (linkedUser.error) {
+      throw new Error(linkedUser.error.message);
+    }
+
+    return linkedUser.data;
+  }
+
   const insertedUser = await adminClient
     .from("app_users")
     .insert({

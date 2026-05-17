@@ -136,6 +136,11 @@ export function TemplateBuilderForm({
               Editing a template creates a new version. Prior versions are
               retained for auditability.
             </p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Mapping templates use one import type and one active selected
+              sheet. Object, ACFR, Department, Function, and Fund imports are
+              separate mapping imports.
+            </p>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">

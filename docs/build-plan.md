@@ -38,9 +38,11 @@ Add non-posted trial balance parsing and preview for CSV and Excel source files 
 
 Slice 5 does not validate, approve, post, write active trial balance lines, update dashboards, generate reports, import budgets, or add AI commentary.
 
-## Slice 6: Mapping and Classification MVP
+## Slice 6: Mapping and Reference Imports
 
-Implement mapping import and classification support without hardcoding file layouts.
+Implement one-mapping-type-at-a-time imports for funds, objects, ACFR mappings, departments, and functions. Mapping imports use uploaded raw files and saved template versions, preserve codes as text, show bad-data reports, classify new/changed/unchanged/duplicate rows, create mapping versions, and commit accepted rows only after confirmation.
+
+Slice 6 explicitly does not support multi-sheet mapping package imports. One mapping import equals one file or one selected Excel sheet and one mapping table.
 
 ## Slice 7: Validation and Exception Review
 

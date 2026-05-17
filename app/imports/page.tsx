@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ensureAppUserForAuthUser } from "@/lib/auth/app-user";
 import { requireUser } from "@/lib/auth/session";
+import { isSupportedMappingImportType } from "@/lib/imports/mapping-import";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatFileSize } from "@/lib/uploads/config";
 
@@ -222,6 +223,20 @@ export default async function ImportsPage() {
                                 Preview Trial Balance
                               </Link>
                             ) : importType?.import_type_code === "trial_balance" ? (
+                              <span className="text-muted-foreground">
+                                Template needed
+                              </span>
+                            ) : importType?.import_type_code &&
+                              isSupportedMappingImportType(importType.import_type_code) &&
+                              batch.template_version_id ? (
+                              <Link
+                                className="text-sm font-medium text-primary hover:underline"
+                                href={`/imports/${batch.import_batch_id}/mapping-preview`}
+                              >
+                                Preview Mapping Import
+                              </Link>
+                            ) : importType?.import_type_code &&
+                              isSupportedMappingImportType(importType.import_type_code) ? (
                               <span className="text-muted-foreground">
                                 Template needed
                               </span>

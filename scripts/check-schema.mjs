@@ -32,6 +32,12 @@ const trialBalancePreviewMigrationPath = join(
   "migrations",
   "20260517000500_trial_balance_preview.sql"
 );
+const mappingImportMigrationPath = join(
+  root,
+  "supabase",
+  "migrations",
+  "20260517000600_mapping_reference_imports.sql"
+);
 
 const requiredTables = [
   "organizations",
@@ -235,6 +241,34 @@ if (!existsSync(trialBalancePreviewMigrationPath)) {
   }
 }
 
+if (!existsSync(mappingImportMigrationPath)) {
+  fail(`Missing mapping import migration: ${mappingImportMigrationPath}`);
+} else {
+  const mappingImportSql = readFileSync(mappingImportMigrationPath, "utf8");
+  const mappingImportSnippets = [
+    "create table if not exists public.mapping_import_runs",
+    "create table if not exists public.mapping_import_rows",
+    "create table if not exists public.mapping_import_issues",
+    "mapping_type text not null check",
+    "target_table text not null check",
+    "row_status text not null check",
+    "add column if not exists fund_group text",
+    "add column if not exists balance_sheet_category text",
+    "add column if not exists acfr_description text",
+    "add column if not exists function_description text",
+    "source_import_batch_id uuid",
+    "source_method text not null default 'import'",
+    "change_reason text",
+    "mapping_imported"
+  ];
+
+  for (const snippet of mappingImportSnippets) {
+    if (!mappingImportSql.includes(snippet)) {
+      fail(`Missing required mapping import migration content: ${snippet}`);
+    }
+  }
+}
+
 const requiredDocs = [
   "docs/product-spec.md",
   "docs/build-plan.md",
@@ -244,6 +278,7 @@ const requiredDocs = [
   "docs/raw-file-upload.md",
   "docs/template-builder.md",
   "docs/trial-balance-preview.md",
+  "docs/mapping-imports.md",
   "TASKS.md"
 ];
 
@@ -421,7 +456,8 @@ if (existsSync(templateActionPath)) {
     "field_mappings",
     "transformation_rules",
     "template_version_selected",
-    "Trial balance templates require an account structure"
+    "Trial balance templates require an account structure",
+    "Mapping templates must keep exactly one active selected sheet"
   ];
 
   for (const snippet of actionSnippets) {
@@ -501,6 +537,65 @@ if (existsSync(previewPagePath)) {
   for (const snippet of previewPageSnippets) {
     if (!previewPage.includes(snippet)) {
       fail(`Missing trial balance preview page content: ${snippet}`);
+    }
+  }
+}
+
+const mappingImportFiles = [
+  "app/imports/[importBatchId]/mapping-preview/page.tsx",
+  "app/imports/[importBatchId]/mapping-preview/actions.ts",
+  "app/imports/[importBatchId]/mapping-preview/bad-data.csv/route.ts",
+  "components/mapping-import-actions.tsx",
+  "lib/imports/mapping-import.ts",
+  "lib/imports/mapping-import-state.ts"
+];
+
+for (const file of mappingImportFiles) {
+  if (!existsSync(join(root, file))) {
+    fail(`Missing mapping import file: ${file}`);
+  }
+}
+
+const mappingImportEnginePath = join(root, "lib", "imports", "mapping-import.ts");
+if (existsSync(mappingImportEnginePath)) {
+  const mappingImportEngine = readFileSync(mappingImportEnginePath, "utf8");
+  const mappingImportEngineSnippets = [
+    "fund_mapping",
+    "object_mapping",
+    "acfr_mapping",
+    "department_mapping",
+    "function_mapping",
+    "loadSourceFileRows",
+    "applyCellTransformations",
+    "duplicate_mapping_code",
+    "missing_required_field",
+    "mapping_import_preview_generated",
+    "mapping_import_committed",
+    "batch_status: \"mapping_imported\""
+  ];
+
+  for (const snippet of mappingImportEngineSnippets) {
+    if (!mappingImportEngine.includes(snippet)) {
+      fail(`Missing mapping import engine content: ${snippet}`);
+    }
+  }
+}
+
+const mappingImportPagePath = join(root, "app", "imports", "[importBatchId]", "mapping-preview", "page.tsx");
+if (existsSync(mappingImportPagePath)) {
+  const mappingImportPage = readFileSync(mappingImportPagePath, "utf8");
+  const mappingImportPageSnippets = [
+    "Mapping Import Review",
+    "Rows accepted",
+    "Rows rejected",
+    "Bad-data report",
+    "Export CSV",
+    "Commit action"
+  ];
+
+  for (const snippet of mappingImportPageSnippets) {
+    if (!mappingImportPage.includes(snippet)) {
+      fail(`Missing mapping import page content: ${snippet}`);
     }
   }
 }

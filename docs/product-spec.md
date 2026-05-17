@@ -128,3 +128,9 @@ Slice 4 does not parse full files, validate financial content, post imports, wri
 Slice 5 implements non-posted trial balance preview parsing for CSV and Excel source files using saved trial balance template versions. It applies saved mappings and transformations, parses account segments from configured account structure data, stores preview runs/rows/issues, and shows preview totals.
 
 Slice 5 does not run the formal validation engine, validate against mapping/reference tables, post imports, write active `trial_balance_lines`, update dashboards, generate reports, import budgets, or add AI commentary.
+
+## Slice 6 Mapping Import Boundary
+
+Slice 6 implements mapping/reference imports for funds, objects, ACFR mappings, departments, and functions. Each import uses one source file or one selected Excel sheet, one mapping import type, and one target mapping table.
+
+Slice 6 does not support multi-sheet mapping package imports, post trial balance actuals, run the full validation engine, update dashboards, generate reports, import budgets, add AI commentary, or add manual mapping maintenance screens.

@@ -33,6 +33,10 @@ Trial balance templates require:
 
 Mapping templates use target fields for fund, object, ACFR, department, and function reference data. Required fields are shown in the UI and enforced before saving.
 
+## Slice 6 Alignment
+
+Mapping templates must target one import type and exactly one active selected sheet. Excel sheet detection remains available, but Object, ACFR, Department, Function, and Fund imports are separate mapping imports rather than one multi-sheet mapping package.
+
 ## File Inspection
 
 The builder reads only a limited preview from Supabase Storage. It does not load full workbooks into the browser and does not import rows into financial tables.

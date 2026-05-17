@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { ensureAppUserForAuthUser } from "@/lib/auth/app-user";
 import { requireUser } from "@/lib/auth/session";
+import { isSupportedMappingImportType } from "@/lib/imports/mapping-import";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupportedImportTypeCode } from "@/lib/uploads/config";
 import { getRequiredTargetFieldNames } from "@/lib/templates/target-fields";
@@ -131,6 +132,17 @@ async function saveTemplateVersion({
           });
 
     const sheetConfigs = collectSheetConfigs(formData, sheetCount);
+
+    if (isSupportedMappingImportType(importType.import_type_code)) {
+      const activeSheetCount = sheetConfigs.filter((sheet) => !sheet.ignoreSheet).length;
+
+      if (activeSheetCount !== 1) {
+        return errorState(
+          "Mapping templates must keep exactly one active selected sheet. Object, ACFR, Department, Function, and Fund imports are separate mapping imports."
+        );
+      }
+    }
+
     const missingRequiredFields = getMissingRequiredFields({
       importTypeCode: importType.import_type_code,
       sheetConfigs

@@ -76,3 +76,15 @@
 - Update import batches to `previewed` only after successful preview generation; never mark them validated, posted, included, or active for reporting in Slice 5.
 - Keep preview issues separate from formal validation results.
 - Continue excluding budget import, budget-to-actual reporting, dashboards, reports, and AI commentary.
+
+## Slice 6 Mapping Import Decisions
+
+- One mapping import updates one mapping/reference table only.
+- Excel mapping imports use exactly one selected active sheet from the saved template version; multi-sheet mapping packages are not supported.
+- Store mapping import preview/review data in `mapping_import_runs`, `mapping_import_rows`, and `mapping_import_issues` instead of reusing trial-balance-specific preview tables.
+- Preserve mapping codes as text so leading zeros are not lost.
+- Require review before commit; changed mappings are summarized before the user commits accepted rows.
+- Create a `mapping_versions` record for each committed mapping import.
+- Insert new effective-dated mapping rows for committed imports and preserve prior rows/history.
+- Keep mapping rows compatible with future manual maintenance through source method, source file, import batch, template version, and change reason metadata.
+- Continue excluding trial balance posting, dashboards, reports, budget import, and AI commentary.

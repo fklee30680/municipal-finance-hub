@@ -87,6 +87,15 @@ Slice 5 adds:
 - `previewed` as an import batch status for successful non-posted preview.
 - Indexes for preview run, row, and issue lookup by organization, batch, run, and source row.
 
+Slice 6 adds:
+
+- `mapping_import_runs` for mapping import preview and commit executions.
+- `mapping_import_rows` for staged mapping rows and new/changed/unchanged/rejected classifications.
+- `mapping_import_issues` for row-level bad-data reporting.
+- `mapping_imported` as an import batch status for committed reference imports.
+- Import source metadata columns on mapping/reference tables for future manual maintenance compatibility.
+- Import batch, source file, template version, and change description metadata on `mapping_versions`.
+
 ## Reporting Defaults
 
 Standard reporting should use active, posted, included imports. The migration creates `public.active_trial_balance_lines` as the default view for active posted actuals. Inactive and superseded import batches are excluded from that view.
@@ -114,6 +123,12 @@ Creating or editing templates does not write to financial actuals or mapping/ref
 Slice 5 preview records are separate from `trial_balance_lines`. They are linked to source files, import batches, template versions, and account structures for traceability, but they are not standard reporting data.
 
 Preview can supersede prior preview runs for the same import batch without deleting raw files or import batches.
+
+## Mapping Import Review
+
+Slice 6 mapping import records are non-financial staging/review records. Committed accepted rows are inserted into `funds`, `objects`, `acfr_mappings`, `departments`, or `functions` and linked to a new `mapping_versions` record.
+
+Rejected rows are excluded from commit and retained in the bad-data report.
 
 ## Deferred
 

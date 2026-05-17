@@ -67,6 +67,8 @@ Slice 4 adds import template management. Templates describe how to read uploaded
 
 Slice 5 adds trial balance preview parsing for CSV and Excel source files using saved template versions. Preview rows, parsed account segments, preview issues, and summary totals are non-posted and are not active for reporting.
 
+Slice 6 adds one-mapping-type-at-a-time reference imports for funds, objects, ACFR mappings, departments, and functions. Mapping imports preview bad data before commit, create mapping versions, and do not post trial balance activity.
+
 Slice 0 intentionally does not implement imports, mappings, validation, finance calculations, dashboards, report generation, budget functionality, role workflows, or AI commentary.
 
 ## Documentation
@@ -80,6 +82,7 @@ Slice 0 intentionally does not implement imports, mappings, validation, finance 
 - `docs/raw-file-upload.md`
 - `docs/template-builder.md`
 - `docs/trial-balance-preview.md`
+- `docs/mapping-imports.md`
 - `TASKS.md`
 
 ## Deployment Target

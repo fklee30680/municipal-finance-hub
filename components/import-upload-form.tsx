@@ -2,13 +2,13 @@
 
 import { useActionState } from "react";
 
-import {
-  initialUploadSourceFileState,
-  uploadSourceFile
-} from "@/app/imports/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  initialUploadSourceFileState,
+  type UploadSourceFileState
+} from "@/lib/uploads/upload-state";
 
 type ImportTypeOption = {
   import_type_id: string;
@@ -17,12 +17,17 @@ type ImportTypeOption = {
 };
 
 export function ImportUploadForm({
+  action,
   importTypes
 }: {
+  action: (
+    previousState: UploadSourceFileState,
+    formData: FormData
+  ) => Promise<UploadSourceFileState>;
   importTypes: ImportTypeOption[];
 }) {
   const [state, formAction, isPending] = useActionState(
-    uploadSourceFile,
+    action,
     initialUploadSourceFileState
   );
 

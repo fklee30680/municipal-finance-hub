@@ -17,27 +17,7 @@ import {
   MAX_UPLOAD_BYTES
 } from "@/lib/uploads/config";
 import { sha256Hex } from "@/lib/uploads/file-hash";
-
-export type UploadSourceFileState = {
-  status: "idle" | "success" | "error";
-  message?: string;
-  duplicateWarning?: string;
-  upload?: {
-    originalFileName: string;
-    importTypeName: string;
-    fiscalYear: string;
-    period: string;
-    fileType: string;
-    fileSize: string;
-    fileHash: string;
-    uploadedAt: string;
-    importBatchStatus: string;
-  };
-};
-
-export const initialUploadSourceFileState: UploadSourceFileState = {
-  status: "idle"
-};
+import type { UploadSourceFileState } from "@/lib/uploads/upload-state";
 
 export async function uploadSourceFile(
   _previousState: UploadSourceFileState,

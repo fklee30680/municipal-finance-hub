@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { uploadSourceFile } from "@/app/imports/actions";
 import { AppShell } from "@/components/app-shell";
 import { ImportUploadForm } from "@/components/import-upload-form";
 import { ensureAppUserForAuthUser } from "@/lib/auth/app-user";
@@ -51,7 +52,7 @@ export default async function NewImportPage() {
           </p>
         ) : null}
 
-        <ImportUploadForm importTypes={importTypes} />
+        <ImportUploadForm action={uploadSourceFile} importTypes={importTypes} />
       </section>
     </AppShell>
   );

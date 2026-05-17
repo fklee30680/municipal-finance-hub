@@ -66,6 +66,7 @@ Slice 0 intentionally does not implement imports, mappings, validation, finance 
 - `docs/build-plan.md`
 - `docs/codex-instructions.md`
 - `docs/architecture-decisions.md`
+- `docs/database-schema.md`
 - `TASKS.md`
 
 ## Deployment Target

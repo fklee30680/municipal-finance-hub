@@ -105,3 +105,8 @@ Acceptance criteria:
 
 Slice 0 only creates the technical foundation. It must not implement finance business logic, database schema beyond placeholders, imports, calculations, dashboards, report generation, budgets, or AI commentary.
 
+## Slice 1 Core Schema Boundary
+
+Slice 1 creates the database foundation required for the product through Phase 7. It establishes migration-driven storage for organizations, users, roles, fiscal calendars, configurable account structures, import templates, raw file metadata, import batches and exceptions, normalized trial balance actuals, reference mappings, calculation result foundations, report reproducibility foundations, audit logs, and controlled inactivation/reactivation workflows.
+
+Slice 1 does not implement import processing, parsing, validation logic, posting workflows, calculations, dashboards, report generation, budget workflows, or AI commentary.

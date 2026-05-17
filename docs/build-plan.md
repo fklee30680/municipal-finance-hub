@@ -8,6 +8,10 @@ Create the Next.js/TypeScript app foundation, Tailwind configuration, shadcn-com
 
 Define the first database schema draft for organizations, fiscal periods, imports, raw files, templates, normalized records, mappings, snapshots, and audit trails.
 
+Slice 1 implementation creates the first Supabase core schema migration and a static schema check script. The migration establishes organization/user/role tables, fiscal calendar tables, configurable account structure tables, import metadata, source file metadata, import batches/exceptions, trial balance actuals, mapping/reference tables, calculation result foundations, report reproducibility foundations, audit logs, and inactivation/reactivation request tables.
+
+Completion note: Slice 1 should remain pending in `TASKS.md` until `npm run lint`, `npm run typecheck`, `npm run build`, and migration validation can be run in an environment with `npm`, dependencies, and Supabase CLI available.
+
 ## Slice 2: Authentication Foundation
 
 Wire Supabase Auth into the app shell and establish user attribution without building the full role workflow.
@@ -62,4 +66,3 @@ Tighten QA, auditability, performance, security, and pilot rollout readiness.
 - Budget-to-actual reporting.
 - AI commentary.
 - Full role and permission workflow.
-

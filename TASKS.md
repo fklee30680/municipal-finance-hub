@@ -1,7 +1,7 @@
 # Build Tasks
 
 - [ ] Slice 0: Project setup and technical foundation.
-- [ ] Slice 1: Data model draft.
+- [ ] Slice 1: Data model draft. Schema migration implemented; pending npm/build and Supabase validation.
 - [ ] Slice 2: Authentication foundation.
 - [ ] Slice 3: Import template foundations.
 - [ ] Slice 4: Raw file preservation.
@@ -16,4 +16,3 @@
 - [ ] Slice 13: Hardening and pilot readiness.
 
 Slice 0 remains unchecked until lint, typecheck, and build can be run successfully with dependencies installed.
-

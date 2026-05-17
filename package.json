@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:schema": "node scripts/check-schema.mjs",
+    "db:lint": "supabase db lint"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

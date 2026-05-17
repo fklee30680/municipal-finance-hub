@@ -54,3 +54,14 @@
 - Create import batches with `batch_status = uploaded`, `reporting_status = excluded`, and `is_active_for_reporting = false`.
 - Use server-side upload handling with the service role key kept out of browser code because table RLS policies are not yet implemented.
 - Do not parse, validate, post, calculate, dashboard, report, import budgets, or generate AI commentary in Slice 3.
+
+## Slice 4 Template Builder Decisions
+
+- Store template builder output in existing template tables: `import_templates`, `import_template_versions`, `sheet_mappings`, `field_mappings`, and `transformation_rules`.
+- Add focused metadata columns for file type, source sample, sheet ignore flags, source column indexes, default values, and template/source linkage rather than creating duplicate template tables.
+- Keep target field definitions centralized in `lib/templates/target-fields.ts` as a temporary typed bridge until a database-backed target-field catalog is justified.
+- Inspect source files server-side from Supabase Storage and send only limited previews to the browser.
+- Save edits by creating new `import_template_versions`; never overwrite historical versions in place.
+- Require account structure selection for trial balance templates.
+- Save transformations as configuration only; do not apply transformations to imported financial rows in Slice 4.
+- Keep budget import and AI commentary inactive.

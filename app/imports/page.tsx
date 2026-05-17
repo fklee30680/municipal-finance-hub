@@ -29,6 +29,7 @@ type ImportBatchRow = {
     | null;
   source_files:
     | {
+        source_file_id: string;
         original_file_name: string;
         content_type: string | null;
         byte_size: number | null;
@@ -39,6 +40,7 @@ type ImportBatchRow = {
         } | null;
       }
     | Array<{
+        source_file_id: string;
         original_file_name: string;
         content_type: string | null;
         byte_size: number | null;
@@ -72,6 +74,7 @@ export default async function ImportsPage() {
         import_type_code
       ),
       source_files (
+        source_file_id,
         original_file_name,
         content_type,
         byte_size,
@@ -102,12 +105,20 @@ export default async function ImportsPage() {
               used in dashboards and reports yet.
             </p>
           </div>
-          <Link
-            className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring"
-            href="/imports/new"
-          >
-            New Upload
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              href="/imports/templates"
+            >
+              Import Templates
+            </Link>
+            <Link
+              className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring"
+              href="/imports/new"
+            >
+              New Upload
+            </Link>
+          </div>
         </div>
 
         <Card>
@@ -141,6 +152,7 @@ export default async function ImportsPage() {
                       <th className="py-3 pr-4 font-medium">Uploaded at</th>
                       <th className="py-3 pr-4 font-medium">File size</th>
                       <th className="py-3 font-medium">Duplicate warning</th>
+                      <th className="py-3 font-medium">Template</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -184,6 +196,18 @@ export default async function ImportsPage() {
                           </td>
                           <td className="py-3 text-muted-foreground">
                             {duplicateDetected ? "Possible duplicate" : "None"}
+                          </td>
+                          <td className="py-3">
+                            {sourceFile?.source_file_id ? (
+                              <Link
+                                className="text-sm font-medium text-primary hover:underline"
+                                href={`/imports/templates/new?sourceFileId=${sourceFile.source_file_id}`}
+                              >
+                                Configure template
+                              </Link>
+                            ) : (
+                              <span className="text-muted-foreground">Unavailable</span>
+                            )}
                           </td>
                         </tr>
                       );

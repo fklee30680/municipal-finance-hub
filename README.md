@@ -63,6 +63,8 @@ Slice 2 adds a setup configuration foundation for organization and fiscal calend
 
 Slice 3 adds raw file upload and source storage. Uploaded files are preserved in Supabase Storage and linked to import batch shells, but they are not parsed, validated, posted, or used for dashboards and reports yet.
 
+Slice 4 adds import template management. Templates describe how to read uploaded file layouts, but they still do not validate, post, calculate, dashboard, or report financial data.
+
 Slice 0 intentionally does not implement imports, mappings, validation, finance calculations, dashboards, report generation, budget functionality, role workflows, or AI commentary.
 
 ## Documentation
@@ -74,6 +76,7 @@ Slice 0 intentionally does not implement imports, mappings, validation, finance 
 - `docs/database-schema.md`
 - `docs/fiscal-calendar.md`
 - `docs/raw-file-upload.md`
+- `docs/template-builder.md`
 - `TASKS.md`
 
 ## Deployment Target

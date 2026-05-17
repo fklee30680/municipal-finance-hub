@@ -26,9 +26,11 @@ Add the first import-facing workflow for preserving raw CSV and Excel files in S
 
 Slice 3 implementation should not parse rows, inspect Excel sheets, map fields, validate financial content, post imports, write normalized financial rows, update dashboards, generate reports, import budgets, or add AI commentary.
 
-## Slice 4: Raw File Preservation
+## Slice 4: Template Selection and Basic Template Builder
 
-Integrate Supabase Storage for raw uploaded files and metadata tracking.
+Add import template management for uploaded source files. Users can create templates, inspect limited CSV/Excel sample data, configure sheet/header/data-start settings, map source columns to target fields, choose an account structure for trial balance templates, save transformation settings, and create new template versions without overwriting prior versions.
+
+Slice 4 implementation does not parse full files, validate financial content, post imports, write normalized rows, update dashboards, generate reports, import budgets, or add AI commentary.
 
 ## Slice 5: Trial Balance Import MVP
 

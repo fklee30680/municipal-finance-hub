@@ -116,3 +116,9 @@ Slice 1 does not implement import processing, parsing, validation logic, posting
 Slice 3 implements raw file intake only. It preserves CSV and Excel files in private object storage, records source file metadata, calculates file hashes, warns on duplicate hashes, creates uploaded/excluded import batch shells, and displays upload history.
 
 Slice 3 does not parse rows, inspect Excel sheets, map fields, validate financial content, post imports, create normalized financial rows, update dashboards, generate reports, import budgets, or add AI commentary.
+
+## Slice 4 Template Builder Boundary
+
+Slice 4 implements configurable, versioned template setup. It inspects limited sample rows from uploaded CSV and Excel files, stores sheet mappings, field mappings, transformation configuration, and account structure selection.
+
+Slice 4 does not parse full files, validate financial content, post imports, write trial balance lines, write mapping/reference rows, update dashboards, generate reports, import budgets, or add AI commentary.

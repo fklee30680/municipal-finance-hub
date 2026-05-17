@@ -20,6 +20,12 @@ const rawUploadMigrationPath = join(
   "migrations",
   "20260517000300_raw_file_upload_storage.sql"
 );
+const templateBuilderMigrationPath = join(
+  root,
+  "supabase",
+  "migrations",
+  "20260517000400_template_builder_support.sql"
+);
 
 const requiredTables = [
   "organizations",
@@ -174,6 +180,28 @@ if (!existsSync(rawUploadMigrationPath)) {
   }
 }
 
+if (!existsSync(templateBuilderMigrationPath)) {
+  fail(`Missing template builder migration: ${templateBuilderMigrationPath}`);
+} else {
+  const templateBuilderSql = readFileSync(templateBuilderMigrationPath, "utf8");
+  const templateBuilderSnippets = [
+    "add column if not exists source_file_id uuid",
+    "add column if not exists file_type text",
+    "add column if not exists source_sample_payload jsonb",
+    "add column if not exists target_import_type_id uuid",
+    "add column if not exists ignore_sheet boolean",
+    "add column if not exists source_column_index integer",
+    "add column if not exists default_value text",
+    "add column if not exists ignore_column boolean"
+  ];
+
+  for (const snippet of templateBuilderSnippets) {
+    if (!templateBuilderSql.includes(snippet)) {
+      fail(`Missing required template builder migration content: ${snippet}`);
+    }
+  }
+}
+
 const requiredDocs = [
   "docs/product-spec.md",
   "docs/build-plan.md",
@@ -181,6 +209,7 @@ const requiredDocs = [
   "docs/database-schema.md",
   "docs/fiscal-calendar.md",
   "docs/raw-file-upload.md",
+  "docs/template-builder.md",
   "TASKS.md"
 ];
 
@@ -308,6 +337,66 @@ if (existsSync(uploadConfigPath)) {
   }
 }
 
+const templateRouteFiles = [
+  "app/imports/templates/page.tsx",
+  "app/imports/templates/new/page.tsx",
+  "app/imports/templates/[templateId]/page.tsx",
+  "app/imports/templates/[templateId]/edit/page.tsx",
+  "app/imports/templates/actions.ts",
+  "components/template-builder-form.tsx",
+  "lib/templates/target-fields.ts",
+  "lib/templates/file-inspection.ts",
+  "lib/templates/transformations.ts"
+];
+
+for (const file of templateRouteFiles) {
+  if (!existsSync(join(root, file))) {
+    fail(`Missing template builder file: ${file}`);
+  }
+}
+
+const targetFieldCatalogPath = join(root, "lib", "templates", "target-fields.ts");
+if (existsSync(targetFieldCatalogPath)) {
+  const targetFieldCatalog = readFileSync(targetFieldCatalogPath, "utf8");
+  const targetFieldSnippets = [
+    "full_account_number",
+    "beginning_balance",
+    "ending_balance",
+    "fund_code",
+    "object_code",
+    "acfr_code",
+    "department_code",
+    "function_code"
+  ];
+
+  for (const snippet of targetFieldSnippets) {
+    if (!targetFieldCatalog.includes(snippet)) {
+      fail(`Missing target field catalog content: ${snippet}`);
+    }
+  }
+}
+
+const templateActionPath = join(root, "app", "imports", "templates", "actions.ts");
+if (existsSync(templateActionPath)) {
+  const templateAction = readFileSync(templateActionPath, "utf8");
+  const actionSnippets = [
+    "createImportTemplate",
+    "createImportTemplateVersion",
+    "version_number",
+    "sheet_mappings",
+    "field_mappings",
+    "transformation_rules",
+    "template_version_selected",
+    "Trial balance templates require an account structure"
+  ];
+
+  for (const snippet of actionSnippets) {
+    if (!templateAction.includes(snippet)) {
+      fail(`Missing template action content: ${snippet}`);
+    }
+  }
+}
+
 const filesToScan = [
   "app",
   "components",
@@ -316,6 +405,10 @@ const filesToScan = [
 
 for (const file of filesToScan) {
   if (file.endsWith(join("lib", "supabase", "admin.ts"))) {
+    continue;
+  }
+
+  if (file.endsWith(join("lib", "supabase", "env.ts"))) {
     continue;
   }
 

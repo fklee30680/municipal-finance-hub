@@ -18,6 +18,12 @@ Slice 3 adds raw upload storage support:
 supabase/migrations/20260517000300_raw_file_upload_storage.sql
 ```
 
+Slice 4 adds template-builder support:
+
+```text
+supabase/migrations/20260517000400_template_builder_support.sql
+```
+
 ## Migration Scope
 
 The migration creates foundations for:
@@ -65,6 +71,14 @@ Slice 3 adds:
 - Duplicate source file linkage by SHA-256 hash.
 - Indexes for source file hash and period lookup.
 
+Slice 4 adds:
+
+- Source file and file type linkage on template versions.
+- Header/data-start defaults and sample payload storage for template versions.
+- Sheet target entity and ignore-sheet configuration.
+- Field source column indexes, default values, and ignore-column configuration.
+- Indexes for template version/source and field/sheet mapping lookups.
+
 ## Reporting Defaults
 
 Standard reporting should use active, posted, included imports. The migration creates `public.active_trial_balance_lines` as the default view for active posted actuals. Inactive and superseded import batches are excluded from that view.
@@ -80,6 +94,12 @@ The migration permits fiscal period `0` so later setup or import workflows can s
 ## Raw Upload Storage
 
 Slice 3 stores uploaded files in Supabase Storage instead of database rows. The database stores `source_files` metadata, SHA-256 hashes, fiscal year/period metadata when provided, and import batch shell records. Uploaded batches remain excluded from reporting and inactive for reporting until later validation and posting workflows exist.
+
+## Template Builder
+
+Slice 4 stores reusable file-layout instructions as versioned templates. The template tables hold sheet mappings, field mappings, and transformation rule configuration. Template versions can be linked back to a sample `source_files` record and to import batches through existing template version fields.
+
+Creating or editing templates does not write to financial actuals or mapping/reference tables.
 
 ## Deferred
 

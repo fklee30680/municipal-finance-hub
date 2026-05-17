@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 type AuthAction = "password" | "signup" | "magic-link";
 
 export function LoginForm() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -33,7 +35,9 @@ export function LoginForm() {
         return;
       }
 
-      setStatus("Signed in. You can open Imports now.");
+      setStatus("Signed in. Opening Imports...");
+      router.push("/imports");
+      router.refresh();
     } catch (error) {
       setStatus(
         error instanceof Error

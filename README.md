@@ -61,6 +61,8 @@ Slice 0 creates only the technical foundation:
 
 Slice 2 adds a setup configuration foundation for organization and fiscal calendar settings. The setup page is read-only until later slices add safe editing workflows.
 
+Slice 3 adds raw file upload and source storage. Uploaded files are preserved in Supabase Storage and linked to import batch shells, but they are not parsed, validated, posted, or used for dashboards and reports yet.
+
 Slice 0 intentionally does not implement imports, mappings, validation, finance calculations, dashboards, report generation, budget functionality, role workflows, or AI commentary.
 
 ## Documentation
@@ -71,6 +73,7 @@ Slice 0 intentionally does not implement imports, mappings, validation, finance 
 - `docs/architecture-decisions.md`
 - `docs/database-schema.md`
 - `docs/fiscal-calendar.md`
+- `docs/raw-file-upload.md`
 - `TASKS.md`
 
 ## Deployment Target

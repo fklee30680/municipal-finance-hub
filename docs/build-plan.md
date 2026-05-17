@@ -20,9 +20,11 @@ Slice 2 implementation creates `supabase/migrations/20260517000200_setup_configu
 
 Completion note: Slice 2 should only be marked complete in `TASKS.md` after lint, typecheck, build, schema checks, and available Supabase validation pass.
 
-## Slice 3: Import Template Foundations
+## Slice 3: Raw File Upload and Source File Storage
 
-Create configurable import template storage and UI stubs for later trial balance and mapping imports.
+Add the first import-facing workflow for preserving raw CSV and Excel files in Supabase Storage, recording source file metadata, calculating SHA-256 hashes, detecting duplicate uploads by organization, creating uploaded/excluded import batch shells, and showing upload history.
+
+Slice 3 implementation should not parse rows, inspect Excel sheets, map fields, validate financial content, post imports, write normalized financial rows, update dashboards, generate reports, import budgets, or add AI commentary.
 
 ## Slice 4: Raw File Preservation
 

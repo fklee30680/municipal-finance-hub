@@ -110,3 +110,9 @@ Slice 0 only creates the technical foundation. It must not implement finance bus
 Slice 1 creates the database foundation required for the product through Phase 7. It establishes migration-driven storage for organizations, users, roles, fiscal calendars, configurable account structures, import templates, raw file metadata, import batches and exceptions, normalized trial balance actuals, reference mappings, calculation result foundations, report reproducibility foundations, audit logs, and controlled inactivation/reactivation workflows.
 
 Slice 1 does not implement import processing, parsing, validation logic, posting workflows, calculations, dashboards, report generation, budget workflows, or AI commentary.
+
+## Slice 3 Raw Upload Boundary
+
+Slice 3 implements raw file intake only. It preserves CSV and Excel files in private object storage, records source file metadata, calculates file hashes, warns on duplicate hashes, creates uploaded/excluded import batch shells, and displays upload history.
+
+Slice 3 does not parse rows, inspect Excel sheets, map fields, validate financial content, post imports, create normalized financial rows, update dashboards, generate reports, import budgets, or add AI commentary.

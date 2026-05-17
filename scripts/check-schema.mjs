@@ -14,6 +14,12 @@ const setupMigrationPath = join(
   "migrations",
   "20260517000200_setup_configuration.sql"
 );
+const rawUploadMigrationPath = join(
+  root,
+  "supabase",
+  "migrations",
+  "20260517000300_raw_file_upload_storage.sql"
+);
 
 const requiredTables = [
   "organizations",
@@ -147,12 +153,34 @@ if (!existsSync(setupMigrationPath)) {
   }
 }
 
+if (!existsSync(rawUploadMigrationPath)) {
+  fail(`Missing raw upload migration: ${rawUploadMigrationPath}`);
+} else {
+  const rawUploadSql = readFileSync(rawUploadMigrationPath, "utf8");
+  const rawUploadSnippets = [
+    "source-files",
+    "file_size_limit",
+    "26214400",
+    "add column if not exists fiscal_year integer",
+    "add column if not exists period integer",
+    "duplicate_source_file_id",
+    "idx_source_files_org_checksum"
+  ];
+
+  for (const snippet of rawUploadSnippets) {
+    if (!rawUploadSql.includes(snippet)) {
+      fail(`Missing required raw upload migration content: ${snippet}`);
+    }
+  }
+}
+
 const requiredDocs = [
   "docs/product-spec.md",
   "docs/build-plan.md",
   "docs/architecture-decisions.md",
   "docs/database-schema.md",
   "docs/fiscal-calendar.md",
+  "docs/raw-file-upload.md",
   "TASKS.md"
 ];
 
@@ -186,6 +214,96 @@ if (!existsSync(setupPagePath)) {
   for (const label of setupPageLabels) {
     if (!setupPage.includes(label)) {
       fail(`Missing setup page label: ${label}`);
+    }
+  }
+}
+
+const importsPagePath = join(root, "app", "imports", "page.tsx");
+const newImportPagePath = join(root, "app", "imports", "new", "page.tsx");
+const uploadActionPath = join(root, "app", "imports", "actions.ts");
+const hashUtilityPath = join(root, "lib", "uploads", "file-hash.ts");
+const uploadConfigPath = join(root, "lib", "uploads", "config.ts");
+
+const requiredUploadFiles = [
+  importsPagePath,
+  newImportPagePath,
+  uploadActionPath,
+  hashUtilityPath,
+  uploadConfigPath
+];
+
+for (const file of requiredUploadFiles) {
+  if (!existsSync(file)) {
+    fail(`Missing raw upload file: ${file}`);
+  }
+}
+
+if (existsSync(importsPagePath)) {
+  const importsPage = readFileSync(importsPagePath, "utf8");
+  const importsPageSnippets = [
+    "New Upload",
+    "Upload history",
+    "No files have been uploaded yet.",
+    "Duplicate warning"
+  ];
+
+  for (const snippet of importsPageSnippets) {
+    if (!importsPage.includes(snippet)) {
+      fail(`Missing imports history content: ${snippet}`);
+    }
+  }
+}
+
+if (existsSync(newImportPagePath)) {
+  const newImportPage = readFileSync(newImportPagePath, "utf8");
+  const newImportPageSnippets = [
+    "Upload Source File",
+    "Parsing, template mapping, validation, and posting happen in later"
+  ];
+
+  for (const snippet of newImportPageSnippets) {
+    if (!newImportPage.includes(snippet)) {
+      fail(`Missing new upload page content: ${snippet}`);
+    }
+  }
+}
+
+if (existsSync(uploadActionPath)) {
+  const uploadAction = readFileSync(uploadActionPath, "utf8");
+  const uploadActionSnippets = [
+    "isAcceptedUploadFileName",
+    "MAX_UPLOAD_BYTES",
+    "sha256Hex",
+    "checksum_sha256",
+    "duplicate_source_file_id",
+    "batch_status: \"uploaded\"",
+    "is_active_for_reporting: false",
+    "rows_processed: 0",
+    "file_uploaded"
+  ];
+
+  for (const snippet of uploadActionSnippets) {
+    if (!uploadAction.includes(snippet)) {
+      fail(`Missing upload action content: ${snippet}`);
+    }
+  }
+}
+
+if (existsSync(hashUtilityPath)) {
+  const hashUtility = readFileSync(hashUtilityPath, "utf8");
+
+  if (!hashUtility.includes("sha256") || !hashUtility.includes("digest(\"hex\")")) {
+    fail("File hash utility does not appear to create stable SHA-256 hex hashes.");
+  }
+}
+
+if (existsSync(uploadConfigPath)) {
+  const uploadConfig = readFileSync(uploadConfigPath, "utf8");
+  const uploadConfigSnippets = [".csv", ".xlsx", ".xls", "25 * 1024 * 1024"];
+
+  for (const snippet of uploadConfigSnippets) {
+    if (!uploadConfig.includes(snippet)) {
+      fail(`Missing upload config content: ${snippet}`);
     }
   }
 }

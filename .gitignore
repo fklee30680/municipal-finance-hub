@@ -1,6 +1,7 @@
 .env
 .env*.local
 .vercel
+supabase/.temp
 .next
 node_modules
 dist

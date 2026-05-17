@@ -12,6 +12,12 @@ Slice 2 adds the setup configuration migration:
 supabase/migrations/20260517000200_setup_configuration.sql
 ```
 
+Slice 3 adds raw upload storage support:
+
+```text
+supabase/migrations/20260517000300_raw_file_upload_storage.sql
+```
+
 ## Migration Scope
 
 The migration creates foundations for:
@@ -52,6 +58,13 @@ Slice 2 confirms or adds:
 - City Standard Account Structure and five account segment definitions as stored configuration.
 - Monthly Finance Report template shell configuration.
 
+Slice 3 adds:
+
+- Private Supabase Storage bucket configuration for `source-files`.
+- Fiscal year and period metadata on `source_files`.
+- Duplicate source file linkage by SHA-256 hash.
+- Indexes for source file hash and period lookup.
+
 ## Reporting Defaults
 
 Standard reporting should use active, posted, included imports. The migration creates `public.active_trial_balance_lines` as the default view for active posted actuals. Inactive and superseded import batches are excluded from that view.
@@ -63,6 +76,10 @@ Slice 2 defaults report period mode to `standard`, which excludes optional perio
 `organization_settings` stores the user-configurable organization display name, current fiscal year, fiscal year start and end dates, standard period count, optional period 0, optional period 13, accrual reporting, and default report period mode.
 
 The migration permits fiscal period `0` so later setup or import workflows can support opening and beginning-balance periods. Slice 2 does not seed fixed fiscal years or fiscal periods.
+
+## Raw Upload Storage
+
+Slice 3 stores uploaded files in Supabase Storage instead of database rows. The database stores `source_files` metadata, SHA-256 hashes, fiscal year/period metadata when provided, and import batch shell records. Uploaded batches remain excluded from reporting and inactive for reporting until later validation and posting workflows exist.
 
 ## Deferred
 

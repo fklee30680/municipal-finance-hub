@@ -43,3 +43,14 @@
 - Do not seed fixed fiscal years or fiscal periods until the user configures or imports them.
 - Keep setup editing read-only in Slice 2; editable workflows should wait for settled auth, validation, and audit patterns.
 - Continue excluding operational budget import, budget-to-actual reporting, and AI commentary.
+
+## Slice 3 Raw Upload Decisions
+
+- Use the private Supabase Storage bucket `source-files` for raw uploaded files.
+- Store files under `organizations/{organization_id}/imports/{import_batch_id}/{safe_original_filename}`.
+- Preserve the original filename in `source_files` while sanitizing only the storage path filename.
+- Calculate SHA-256 hashes from raw file bytes for duplicate detection.
+- Warn on duplicate hashes within the same organization but do not block or delete duplicates in Slice 3.
+- Create import batches with `batch_status = uploaded`, `reporting_status = excluded`, and `is_active_for_reporting = false`.
+- Use server-side upload handling with the service role key kept out of browser code because table RLS policies are not yet implemented.
+- Do not parse, validate, post, calculate, dashboard, report, import budgets, or generate AI commentary in Slice 3.

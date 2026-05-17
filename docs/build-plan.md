@@ -32,9 +32,11 @@ Add import template management for uploaded source files. Users can create templ
 
 Slice 4 implementation does not parse full files, validate financial content, post imports, write normalized rows, update dashboards, generate reports, import budgets, or add AI commentary.
 
-## Slice 5: Trial Balance Import MVP
+## Slice 5: Trial Balance Parsing and Preview
 
-Implement trial balance upload, parsing preview, and normalized storage.
+Add non-posted trial balance parsing and preview for CSV and Excel source files using saved template versions. Preview applies configured field mappings, transformation rules, and account structures; stores preview runs/rows/issues separately from posted actuals; shows parsed fund, ACFR, department, function, and object segments; and summarizes preview totals.
+
+Slice 5 does not validate, approve, post, write active trial balance lines, update dashboards, generate reports, import budgets, or add AI commentary.
 
 ## Slice 6: Mapping and Classification MVP
 

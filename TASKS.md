@@ -5,7 +5,7 @@
 - [x] Slice 2: Seed data and setup configuration foundation. Local schema, lint, typecheck, and build checks passed; Supabase CLI validation unavailable locally.
 - [x] Slice 3: Raw file upload and source file storage. Local schema, lint, typecheck, and build checks passed; migration not pushed remotely by Codex.
 - [x] Slice 4: Template selection and basic template builder. Local schema, lint, typecheck, and build checks passed; migration not pushed remotely by Codex.
-- [ ] Slice 5: Trial balance import MVP.
+- [x] Slice 5: Trial balance parsing and preview. Local schema, lint, typecheck, and build checks passed; Supabase local lint could not connect because the local Supabase database is not running.
 - [ ] Slice 6: Mapping and classification MVP.
 - [ ] Slice 7: Validation and exception review.
 - [ ] Slice 8: Data review tables.

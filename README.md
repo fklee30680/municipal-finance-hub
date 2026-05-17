@@ -65,6 +65,8 @@ Slice 3 adds raw file upload and source storage. Uploaded files are preserved in
 
 Slice 4 adds import template management. Templates describe how to read uploaded file layouts, but they still do not validate, post, calculate, dashboard, or report financial data.
 
+Slice 5 adds trial balance preview parsing for CSV and Excel source files using saved template versions. Preview rows, parsed account segments, preview issues, and summary totals are non-posted and are not active for reporting.
+
 Slice 0 intentionally does not implement imports, mappings, validation, finance calculations, dashboards, report generation, budget functionality, role workflows, or AI commentary.
 
 ## Documentation
@@ -77,6 +79,7 @@ Slice 0 intentionally does not implement imports, mappings, validation, finance 
 - `docs/fiscal-calendar.md`
 - `docs/raw-file-upload.md`
 - `docs/template-builder.md`
+- `docs/trial-balance-preview.md`
 - `TASKS.md`
 
 ## Deployment Target

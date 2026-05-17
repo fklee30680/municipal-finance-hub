@@ -65,3 +65,14 @@
 - Require account structure selection for trial balance templates.
 - Save transformations as configuration only; do not apply transformations to imported financial rows in Slice 4.
 - Keep budget import and AI commentary inactive.
+
+## Slice 5 Trial Balance Preview Decisions
+
+- Store preview output in separate non-posted tables: `import_preview_runs`, `import_preview_rows`, and `import_preview_issues`.
+- Generate preview from the preserved raw source file and the selected `trial_balance` template version; never require a second upload.
+- Apply saved field mappings and transformation rules for preview only.
+- Load account structure and segment definitions from the database for account parsing; do not hardcode City account segments in application logic.
+- Preserve leading zeros by treating account numbers and segment codes as text.
+- Update import batches to `previewed` only after successful preview generation; never mark them validated, posted, included, or active for reporting in Slice 5.
+- Keep preview issues separate from formal validation results.
+- Continue excluding budget import, budget-to-actual reporting, dashboards, reports, and AI commentary.

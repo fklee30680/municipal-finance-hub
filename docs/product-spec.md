@@ -122,3 +122,9 @@ Slice 3 does not parse rows, inspect Excel sheets, map fields, validate financia
 Slice 4 implements configurable, versioned template setup. It inspects limited sample rows from uploaded CSV and Excel files, stores sheet mappings, field mappings, transformation configuration, and account structure selection.
 
 Slice 4 does not parse full files, validate financial content, post imports, write trial balance lines, write mapping/reference rows, update dashboards, generate reports, import budgets, or add AI commentary.
+
+## Slice 5 Trial Balance Preview Boundary
+
+Slice 5 implements non-posted trial balance preview parsing for CSV and Excel source files using saved trial balance template versions. It applies saved mappings and transformations, parses account segments from configured account structure data, stores preview runs/rows/issues, and shows preview totals.
+
+Slice 5 does not run the formal validation engine, validate against mapping/reference tables, post imports, write active `trial_balance_lines`, update dashboards, generate reports, import budgets, or add AI commentary.

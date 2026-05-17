@@ -79,6 +79,14 @@ Slice 4 adds:
 - Field source column indexes, default values, and ignore-column configuration.
 - Indexes for template version/source and field/sheet mapping lookups.
 
+Slice 5 adds:
+
+- `import_preview_runs` for non-posted trial balance preview executions.
+- `import_preview_rows` for mapped/transformed preview rows and parsed account segments.
+- `import_preview_issues` for row-level parse issues.
+- `previewed` as an import batch status for successful non-posted preview.
+- Indexes for preview run, row, and issue lookup by organization, batch, run, and source row.
+
 ## Reporting Defaults
 
 Standard reporting should use active, posted, included imports. The migration creates `public.active_trial_balance_lines` as the default view for active posted actuals. Inactive and superseded import batches are excluded from that view.
@@ -100,6 +108,12 @@ Slice 3 stores uploaded files in Supabase Storage instead of database rows. The 
 Slice 4 stores reusable file-layout instructions as versioned templates. The template tables hold sheet mappings, field mappings, and transformation rule configuration. Template versions can be linked back to a sample `source_files` record and to import batches through existing template version fields.
 
 Creating or editing templates does not write to financial actuals or mapping/reference tables.
+
+## Trial Balance Preview
+
+Slice 5 preview records are separate from `trial_balance_lines`. They are linked to source files, import batches, template versions, and account structures for traceability, but they are not standard reporting data.
+
+Preview can supersede prior preview runs for the same import batch without deleting raw files or import batches.
 
 ## Deferred
 

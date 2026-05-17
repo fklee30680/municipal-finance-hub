@@ -26,6 +26,12 @@ const templateBuilderMigrationPath = join(
   "migrations",
   "20260517000400_template_builder_support.sql"
 );
+const trialBalancePreviewMigrationPath = join(
+  root,
+  "supabase",
+  "migrations",
+  "20260517000500_trial_balance_preview.sql"
+);
 
 const requiredTables = [
   "organizations",
@@ -202,6 +208,33 @@ if (!existsSync(templateBuilderMigrationPath)) {
   }
 }
 
+if (!existsSync(trialBalancePreviewMigrationPath)) {
+  fail(`Missing trial balance preview migration: ${trialBalancePreviewMigrationPath}`);
+} else {
+  const previewSql = readFileSync(trialBalancePreviewMigrationPath, "utf8");
+  const previewSnippets = [
+    "create table if not exists public.import_preview_runs",
+    "create table if not exists public.import_preview_rows",
+    "create table if not exists public.import_preview_issues",
+    "batch_status in ('draft', 'uploaded', 'previewed'",
+    "full_account_number text",
+    "fund_code text",
+    "acfr_code text",
+    "department_code text",
+    "function_code text",
+    "object_code text",
+    "raw_row_json jsonb",
+    "transformed_row_json jsonb",
+    "issue_severity in ('info', 'warning', 'error')"
+  ];
+
+  for (const snippet of previewSnippets) {
+    if (!previewSql.includes(snippet)) {
+      fail(`Missing required trial balance preview migration content: ${snippet}`);
+    }
+  }
+}
+
 const requiredDocs = [
   "docs/product-spec.md",
   "docs/build-plan.md",
@@ -210,6 +243,7 @@ const requiredDocs = [
   "docs/fiscal-calendar.md",
   "docs/raw-file-upload.md",
   "docs/template-builder.md",
+  "docs/trial-balance-preview.md",
   "TASKS.md"
 ];
 
@@ -393,6 +427,80 @@ if (existsSync(templateActionPath)) {
   for (const snippet of actionSnippets) {
     if (!templateAction.includes(snippet)) {
       fail(`Missing template action content: ${snippet}`);
+    }
+  }
+}
+
+const trialBalancePreviewFiles = [
+  "app/imports/[importBatchId]/preview/page.tsx",
+  "app/imports/[importBatchId]/preview/actions.ts",
+  "components/trial-balance-preview-action.tsx",
+  "lib/imports/account-parser.ts",
+  "lib/imports/file-parsers.ts",
+  "lib/imports/transformations.ts",
+  "lib/imports/trial-balance-preview.ts"
+];
+
+for (const file of trialBalancePreviewFiles) {
+  if (!existsSync(join(root, file))) {
+    fail(`Missing trial balance preview file: ${file}`);
+  }
+}
+
+const accountParserPath = join(root, "lib", "imports", "account-parser.ts");
+if (existsSync(accountParserPath)) {
+  const accountParser = readFileSync(accountParserPath, "utf8");
+  const accountParserSnippets = [
+    "segmentCount",
+    "removeTrailingDelimiters",
+    "preserveLeadingZeros",
+    "parsedSegments",
+    "account_segment_count_mismatch"
+  ];
+
+  for (const snippet of accountParserSnippets) {
+    if (!accountParser.includes(snippet)) {
+      fail(`Missing account parser content: ${snippet}`);
+    }
+  }
+}
+
+const previewEnginePath = join(root, "lib", "imports", "trial-balance-preview.ts");
+if (existsSync(previewEnginePath)) {
+  const previewEngine = readFileSync(previewEnginePath, "utf8");
+  const previewEngineSnippets = [
+    "getRequiredTargetFieldNames(\"trial_balance\")",
+    "loadSourceFileRows",
+    "parseAccountNumber",
+    "applyCellTransformations",
+    "parsePreviewNumber",
+    "batch_status: \"previewed\"",
+    "is_active_for_reporting: false",
+    "trial_balance_preview_generated"
+  ];
+
+  for (const snippet of previewEngineSnippets) {
+    if (!previewEngine.includes(snippet)) {
+      fail(`Missing trial balance preview engine content: ${snippet}`);
+    }
+  }
+}
+
+const previewPagePath = join(root, "app", "imports", "[importBatchId]", "preview", "page.tsx");
+if (existsSync(previewPagePath)) {
+  const previewPage = readFileSync(previewPagePath, "utf8");
+  const previewPageSnippets = [
+    "Trial Balance Preview",
+    "Preview only",
+    "Preview summary",
+    "Preview rows",
+    "Rows with preview issues",
+    "Generate preview"
+  ];
+
+  for (const snippet of previewPageSnippets) {
+    if (!previewPage.includes(snippet)) {
+      fail(`Missing trial balance preview page content: ${snippet}`);
     }
   }
 }

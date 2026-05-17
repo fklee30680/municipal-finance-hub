@@ -12,6 +12,7 @@ type ImportBatchRow = {
   fiscal_year: number | null;
   period: number | null;
   batch_status: string;
+  template_version_id: string | null;
   warning_count: number;
   created_at: string;
   metadata: {
@@ -66,6 +67,7 @@ export default async function ImportsPage() {
       fiscal_year,
       period,
       batch_status,
+      template_version_id,
       warning_count,
       created_at,
       metadata,
@@ -153,6 +155,7 @@ export default async function ImportsPage() {
                       <th className="py-3 pr-4 font-medium">File size</th>
                       <th className="py-3 font-medium">Duplicate warning</th>
                       <th className="py-3 font-medium">Template</th>
+                      <th className="py-3 font-medium">Preview</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -207,6 +210,25 @@ export default async function ImportsPage() {
                               </Link>
                             ) : (
                               <span className="text-muted-foreground">Unavailable</span>
+                            )}
+                          </td>
+                          <td className="py-3">
+                            {importType?.import_type_code === "trial_balance" &&
+                            batch.template_version_id ? (
+                              <Link
+                                className="text-sm font-medium text-primary hover:underline"
+                                href={`/imports/${batch.import_batch_id}/preview`}
+                              >
+                                Preview Trial Balance
+                              </Link>
+                            ) : importType?.import_type_code === "trial_balance" ? (
+                              <span className="text-muted-foreground">
+                                Template needed
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                Not available
+                              </span>
                             )}
                           </td>
                         </tr>

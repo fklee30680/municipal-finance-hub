@@ -8,7 +8,12 @@ import { requireUser } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SUPPORTED_IMPORT_TYPE_CODES } from "@/lib/uploads/config";
 
-export default async function NewImportPage() {
+export default async function NewImportPage({
+  searchParams
+}: {
+  searchParams: Promise<{ importTypeCode?: string }>;
+}) {
+  const { importTypeCode } = await searchParams;
   const authUser = await requireUser();
   const adminClient = createAdminClient();
   const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
@@ -52,7 +57,11 @@ export default async function NewImportPage() {
           </p>
         ) : null}
 
-        <ImportUploadForm action={uploadSourceFile} importTypes={importTypes} />
+        <ImportUploadForm
+          action={uploadSourceFile}
+          defaultImportTypeCode={importTypeCode}
+          importTypes={importTypes}
+        />
       </section>
     </AppShell>
   );

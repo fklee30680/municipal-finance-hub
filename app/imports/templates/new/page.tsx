@@ -12,9 +12,9 @@ import { SUPPORTED_IMPORT_TYPE_CODES } from "@/lib/uploads/config";
 export default async function NewImportTemplatePage({
   searchParams
 }: {
-  searchParams: Promise<{ sourceFileId?: string }>;
+  searchParams: Promise<{ importTypeCode?: string; sourceFileId?: string }>;
 }) {
-  const { sourceFileId } = await searchParams;
+  const { importTypeCode, sourceFileId } = await searchParams;
   const authUser = await requireUser();
   const adminClient = createAdminClient();
   const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
@@ -51,6 +51,11 @@ export default async function NewImportTemplatePage({
         <TemplateBuilderForm
           accountStructures={data.accountStructures}
           action={createImportTemplate}
+          defaultImportTypeId={
+            data.importTypes.find(
+              (importType) => importType.import_type_code === importTypeCode
+            )?.import_type_id
+          }
           importTypes={data.importTypes}
           mode="create"
           preview={preview}

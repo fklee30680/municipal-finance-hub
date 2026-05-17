@@ -18,12 +18,14 @@ type ImportTypeOption = {
 
 export function ImportUploadForm({
   action,
+  defaultImportTypeCode,
   importTypes
 }: {
   action: (
     previousState: UploadSourceFileState,
     formData: FormData
   ) => Promise<UploadSourceFileState>;
+  defaultImportTypeCode?: string;
   importTypes: ImportTypeOption[];
 }) {
   const [state, formAction, isPending] = useActionState(
@@ -48,6 +50,12 @@ export function ImportUploadForm({
                 id="importTypeId"
                 name="importTypeId"
                 required
+                defaultValue={
+                  importTypes.find(
+                    (importType) =>
+                      importType.import_type_code === defaultImportTypeCode
+                  )?.import_type_id ?? ""
+                }
               >
                 <option value="">Select import type</option>
                 {importTypes.map((importType) => (

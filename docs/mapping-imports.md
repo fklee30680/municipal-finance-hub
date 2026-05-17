@@ -16,6 +16,18 @@ Multi-sheet mapping packages are intentionally out of scope. Excel sheet detecti
 
 Object, ACFR, Department, Function, and Fund imports should be uploaded and reviewed as separate mapping imports.
 
+## User Workflow
+
+Reference imports use dedicated lanes under `/imports/reference`:
+
+- `/imports/reference/funds`
+- `/imports/reference/objects`
+- `/imports/reference/acfr`
+- `/imports/reference/departments`
+- `/imports/reference/functions`
+
+Each lane shows active reference row counts, the latest template, import history, and focused actions for upload, template configuration, review, bad-data export, and commit.
+
 ## Preview and Bad-Data Review
 
 The mapping import review workflow stages data in:

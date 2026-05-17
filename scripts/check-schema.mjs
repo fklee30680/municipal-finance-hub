@@ -339,7 +339,8 @@ for (const file of requiredUploadFiles) {
 if (existsSync(importsPagePath)) {
   const importsPage = readFileSync(importsPagePath, "utf8");
   const importsPageSnippets = [
-    "New Upload",
+    "Reference Imports",
+    "General Upload",
     "Upload history",
     "No files have been uploaded yet.",
     "Duplicate warning"
@@ -545,9 +546,12 @@ const mappingImportFiles = [
   "app/imports/[importBatchId]/mapping-preview/page.tsx",
   "app/imports/[importBatchId]/mapping-preview/actions.ts",
   "app/imports/[importBatchId]/mapping-preview/bad-data.csv/route.ts",
+  "app/imports/reference/page.tsx",
+  "app/imports/reference/[referenceType]/page.tsx",
   "components/mapping-import-actions.tsx",
   "lib/imports/mapping-import.ts",
-  "lib/imports/mapping-import-state.ts"
+  "lib/imports/mapping-import-state.ts",
+  "lib/imports/reference-imports.ts"
 ];
 
 for (const file of mappingImportFiles) {

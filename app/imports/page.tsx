@@ -103,12 +103,19 @@ export default async function ImportsPage() {
               Imports
             </h1>
             <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              Uploaded files are preserved as raw source files and linked to
-              draft import batches. Files are not parsed, validated, posted, or
-              used in dashboards and reports yet.
+              Choose a guided import lane for reference data, or use the
+              general upload history for raw source files and trial balance
+              work. Reference imports are reviewed before accepted rows are
+              committed.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Link
+              className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring"
+              href="/imports/reference"
+            >
+              Reference Imports
+            </Link>
             <Link
               className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
               href="/imports/templates"
@@ -116,12 +123,50 @@ export default async function ImportsPage() {
               Import Templates
             </Link>
             <Link
-              className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring"
+              className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
               href="/imports/new"
             >
-              New Upload
+              General Upload
             </Link>
           </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Reference data imports</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm leading-6 text-muted-foreground">
+                Funds, Objects, ACFR, Departments, and Functions each have their
+                own import lane with upload, template, review, bad-data report,
+                and commit steps.
+              </p>
+              <Link
+                className="text-sm font-medium text-primary hover:underline"
+                href="/imports/reference"
+              >
+                Open Reference Imports
+              </Link>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Trial balance imports</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm leading-6 text-muted-foreground">
+                Trial balances continue to use the raw upload, template, and
+                preview workflow. Preview is not validation or posting.
+              </p>
+              <Link
+                className="text-sm font-medium text-primary hover:underline"
+                href="/imports/new?importTypeCode=trial_balance"
+              >
+                Upload Trial Balance
+              </Link>
+            </CardContent>
+          </Card>
         </div>
 
         <Card>

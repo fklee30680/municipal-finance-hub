@@ -128,6 +128,17 @@ Preview can supersede prior preview runs for the same import batch without delet
 
 Slice 6 mapping import records are non-financial staging/review records. Committed accepted rows are inserted into `funds`, `objects`, `acfr_mappings`, `departments`, or `functions` and linked to a new `mapping_versions` record.
 
+## Slice 7 Validation Tables
+
+Slice 7 adds validation persistence for previewed trial balance imports:
+
+- `validation_runs` records validation executions, posting eligibility, severity counts, row counts, source/template/account-structure/preview traceability, and warning acknowledgement state.
+- `validation_run_mapping_versions` records mapping versions used during validation so later posting and reporting can remain reproducible.
+- `warning_acknowledgements` stores user attribution, timestamp, note, and warning count when allowed warnings are acknowledged.
+- `import_exceptions` is extended with validation run, preview run, preview row, source column, target field, raw value, transformed value, suggested fix, and resolution status fields.
+
+Slice 7 validation rows remain non-posted. Import batches can move to validation statuses, but they remain excluded from reporting and inactive for reporting until Slice 8 posting.
+
 Rejected rows are excluded from commit and retained in the bad-data report.
 
 ## Deferred

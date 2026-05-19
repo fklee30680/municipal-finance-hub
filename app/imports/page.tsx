@@ -202,6 +202,7 @@ export default async function ImportsPage() {
                       <th className="py-3 font-medium">Duplicate warning</th>
                       <th className="py-3 font-medium">Template</th>
                       <th className="py-3 font-medium">Preview</th>
+                      <th className="py-3 font-medium">Validation</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -284,6 +285,25 @@ export default async function ImportsPage() {
                               isSupportedMappingImportType(importType.import_type_code) ? (
                               <span className="text-muted-foreground">
                                 Template needed
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                Not available
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3">
+                            {importType?.import_type_code === "trial_balance" &&
+                            batch.template_version_id ? (
+                              <Link
+                                className="text-sm font-medium text-primary hover:underline"
+                                href={`/imports/${batch.import_batch_id}/validation`}
+                              >
+                                Trial Balance Validation
+                              </Link>
+                            ) : importType?.import_type_code === "trial_balance" ? (
+                              <span className="text-muted-foreground">
+                                Preview needed
                               </span>
                             ) : (
                               <span className="text-muted-foreground">

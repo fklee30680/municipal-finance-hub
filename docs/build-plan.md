@@ -44,9 +44,9 @@ Implement one-mapping-type-at-a-time imports for funds, objects, ACFR mappings, 
 
 Slice 6 explicitly does not support multi-sheet mapping package imports. One mapping import equals one file or one selected Excel sheet and one mapping table.
 
-## Slice 7: Validation and Exception Review
+## Slice 7: Trial Balance Validation and Exception Review
 
-Implement validation rules, warnings, errors, exception review, and import states.
+Implement trial balance validation against Slice 5 preview rows using committed Slice 6 mapping/reference data. Validation creates `validation_runs`, carries forward preview issues into validation exceptions, records mapping versions used, supports exception review/export, and allows warning acknowledgement only where allowed. Slice 7 determines posting eligibility only; it does not post rows, activate data, replace periods, calculate analysis outputs, update dashboards, generate reports, import budgets, or add AI commentary.
 
 ## Slice 8: Data Review Tables
 

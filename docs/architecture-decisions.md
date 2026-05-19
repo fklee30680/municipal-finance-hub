@@ -88,3 +88,15 @@
 - Insert new effective-dated mapping rows for committed imports and preserve prior rows/history.
 - Keep mapping rows compatible with future manual maintenance through source method, source file, import batch, template version, and change reason metadata.
 - Continue excluding trial balance posting, dashboards, reports, budget import, and AI commentary.
+
+## Slice 7 Validation Decisions
+
+- Validate trial balance imports from `import_preview_rows`; do not bypass preview by validating raw uploads directly.
+- Store validation history in `validation_runs` and keep prior runs by marking older completed runs superseded.
+- Store row-level validation exceptions in `import_exceptions` with source row, source column, target field, raw value, transformed value, severity, message, suggested fix, and resolution status.
+- Link validation runs to committed `mapping_versions` through `validation_run_mapping_versions` where mappings provide version IDs.
+- Use `critical_error`, `warning`, and `information` as Slice 7 validation severities while keeping legacy exception severity values allowed for earlier data.
+- Keep warning acknowledgement separate in `warning_acknowledgements`; critical errors cannot be acknowledged into posting eligibility.
+- Use an isolated MVP sign convention for validation formula checks so Slice 9 can replace it with configurable calculation rules later.
+- Update import batches to validation statuses only: `validation_failed`, `validated_with_warnings`, or `validated`.
+- Continue excluding posting, active reporting rows, replacement execution, calculations, dashboards, reports, budget import, and AI commentary.

@@ -134,3 +134,9 @@ Slice 5 does not run the formal validation engine, validate against mapping/refe
 Slice 6 implements mapping/reference imports for funds, objects, ACFR mappings, departments, and functions. Each import uses one source file or one selected Excel sheet, one mapping import type, and one target mapping table.
 
 Slice 6 does not support multi-sheet mapping package imports, post trial balance actuals, run the full validation engine, update dashboards, generate reports, import budgets, add AI commentary, or add manual mapping maintenance screens.
+
+## Slice 7: Trial Balance Validation and Exception Review
+
+Slice 7 validates previewed trial balance rows before posting. Validation uses Slice 5 preview rows, committed Slice 6 mappings, configured account structures, fiscal setup, and centralized validation rules. It stores validation runs, exception details, mapping-version traceability, and warning acknowledgements where allowed.
+
+Slice 7 does not post data, create active trial balance lines, execute period replacement/supersession, run calculations, update dashboards, generate reports, import budgets, add AI commentary, or allow in-app source row editing.

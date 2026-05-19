@@ -38,6 +38,12 @@ const mappingImportMigrationPath = join(
   "migrations",
   "20260517000600_mapping_reference_imports.sql"
 );
+const validationMigrationPath = join(
+  root,
+  "supabase",
+  "migrations",
+  "20260519023954_trial_balance_validation.sql"
+);
 
 const requiredTables = [
   "organizations",
@@ -269,6 +275,30 @@ if (!existsSync(mappingImportMigrationPath)) {
   }
 }
 
+if (!existsSync(validationMigrationPath)) {
+  fail(`Missing validation migration: ${validationMigrationPath}`);
+} else {
+  const validationSql = readFileSync(validationMigrationPath, "utf8");
+  const validationSnippets = [
+    "create table if not exists public.validation_runs",
+    "create table if not exists public.validation_run_mapping_versions",
+    "create table if not exists public.warning_acknowledgements",
+    "add column if not exists validation_run_id",
+    "add column if not exists preview_row_id",
+    "add column if not exists source_column_name",
+    "severity in ('critical_error', 'warning', 'information'",
+    "validation_failed",
+    "validated_with_warnings",
+    "idx_validation_runs_batch"
+  ];
+
+  for (const snippet of validationSnippets) {
+    if (!validationSql.includes(snippet)) {
+      fail(`Missing required validation migration content: ${snippet}`);
+    }
+  }
+}
+
 const requiredDocs = [
   "docs/product-spec.md",
   "docs/build-plan.md",
@@ -279,6 +309,7 @@ const requiredDocs = [
   "docs/template-builder.md",
   "docs/trial-balance-preview.md",
   "docs/mapping-imports.md",
+  "docs/trial-balance-validation.md",
   "TASKS.md"
 ];
 
@@ -600,6 +631,71 @@ if (existsSync(mappingImportPagePath)) {
   for (const snippet of mappingImportPageSnippets) {
     if (!mappingImportPage.includes(snippet)) {
       fail(`Missing mapping import page content: ${snippet}`);
+    }
+  }
+}
+
+const validationFiles = [
+  "app/imports/[importBatchId]/validation/page.tsx",
+  "app/imports/[importBatchId]/validation/actions.ts",
+  "app/imports/[importBatchId]/validation/exceptions.csv/route.ts",
+  "components/trial-balance-validation-actions.tsx",
+  "lib/imports/trial-balance-validation.ts",
+  "lib/imports/validation-rules.ts",
+  "lib/imports/validation-state.ts"
+];
+
+for (const file of validationFiles) {
+  if (!existsSync(join(root, file))) {
+    fail(`Missing trial balance validation file: ${file}`);
+  }
+}
+
+const validationEnginePath = join(root, "lib", "imports", "trial-balance-validation.ts");
+if (existsSync(validationEnginePath)) {
+  const validationEngine = readFileSync(validationEnginePath, "utf8");
+  const validationEngineSnippets = [
+    "runTrialBalanceValidation",
+    "loadLatestPreviewRun",
+    "import_preview_rows",
+    "import_preview_issues",
+    "validation_runs",
+    "validation_run_mapping_versions",
+    "warning_acknowledgements",
+    "missing_fund_mapping",
+    "missing_object_mapping",
+    "duplicate_full_account_number",
+    "balance_formula_failure",
+    "net_change_formula_failure",
+    "period_conflict_active_data_exists",
+    "batch_status: batchStatus",
+    "is_active_for_reporting: false",
+    "validation_warning_acknowledged"
+  ];
+
+  for (const snippet of validationEngineSnippets) {
+    if (!validationEngine.includes(snippet)) {
+      fail(`Missing validation engine content: ${snippet}`);
+    }
+  }
+}
+
+const validationPagePath = join(root, "app", "imports", "[importBatchId]", "validation", "page.tsx");
+if (existsSync(validationPagePath)) {
+  const validationPage = readFileSync(validationPagePath, "utf8");
+  const validationPageSnippets = [
+    "Trial Balance Validation",
+    "Validation determines whether this import is eligible for posting",
+    "Validation summary",
+    "Exception detail",
+    "Warning acknowledgement",
+    "Export CSV",
+    "Critical errors cannot be acknowledged"
+  ];
+
+  for (const snippet of validationPageSnippets) {
+    if (!validationPage.includes(snippet)) {
+      fail(`Missing validation page content: ${snippet}`);
     }
   }
 }

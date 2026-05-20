@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,9 +64,12 @@ export function TemplateBuilderForm({
     action,
     initialTemplateSaveState
   );
+  const [selectedImportTypeId, setSelectedImportTypeId] = useState(
+    defaultImportTypeId ?? ""
+  );
   const selectedImportType =
-    importTypes.find((importType) => importType.import_type_id === defaultImportTypeId) ??
-    importTypes[0];
+    importTypes.find((importType) => importType.import_type_id === selectedImportTypeId) ??
+    null;
   const targetFields = selectedImportType
     ? getTargetFields(selectedImportType.import_type_code)
     : [];
@@ -79,6 +82,11 @@ export function TemplateBuilderForm({
         </CardHeader>
         <CardContent>
           <form className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]" method="get">
+            <input
+              name="importTypeCode"
+              type="hidden"
+              value={selectedImportType?.import_type_code ?? ""}
+            />
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="sourceFileId">
                 Sample source file/import batch
@@ -161,11 +169,12 @@ export function TemplateBuilderForm({
                 </label>
                 <select
                   className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  defaultValue={defaultImportTypeId ?? ""}
                   disabled={mode === "edit"}
                   id="importTypeId"
                   name="importTypeId"
+                  onChange={(event) => setSelectedImportTypeId(event.target.value)}
                   required
+                  value={selectedImportTypeId}
                 >
                   <option value="">Select import type</option>
                   {importTypes.map((importType) => (

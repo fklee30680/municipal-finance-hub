@@ -7,6 +7,10 @@ import { redirect } from "next/navigation";
 
 import { ensureAppUserForAuthUser } from "@/lib/auth/app-user";
 import { getCurrentUser } from "@/lib/auth/session";
+import {
+  initialArchiveImportState,
+  type ArchiveImportState
+} from "@/lib/imports/archive-state";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildRawUploadPath, RAW_UPLOADS_BUCKET } from "@/lib/supabase/storage";
 import {
@@ -30,6 +34,150 @@ export async function uploadSourceFile(
       error instanceof Error
         ? error.message
         : "Upload failed before it could be saved."
+    );
+  }
+}
+
+export async function archiveUploadedImportAction(
+  _previousState: ArchiveImportState,
+  formData: FormData
+): Promise<ArchiveImportState> {
+  try {
+    const authUser = await getCurrentUser();
+
+    if (!authUser) {
+      redirect("/login");
+    }
+
+    const importBatchId = getStringValue(formData.get("importBatchId"));
+    const reason = getStringValue(formData.get("reason"));
+
+    if (!importBatchId) {
+      return archiveErrorState("Import batch is required.");
+    }
+
+    const adminClient = createAdminClient();
+    const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
+    const batchResult = await adminClient
+      .from("import_batches")
+      .select(
+        "import_batch_id, source_file_id, batch_status, is_active_for_reporting, metadata"
+      )
+      .eq("organization_id", appUser.organization_id)
+      .eq("import_batch_id", importBatchId)
+      .maybeSingle<{
+        batch_status: string;
+        import_batch_id: string;
+        is_active_for_reporting: boolean;
+        metadata: Record<string, unknown> | null;
+        source_file_id: string | null;
+      }>();
+
+    if (batchResult.error) {
+      return archiveErrorState(batchResult.error.message);
+    }
+
+    if (!batchResult.data) {
+      return archiveErrorState("Import batch was not found.");
+    }
+
+    if (
+      batchResult.data.is_active_for_reporting ||
+      ["posted", "posted_with_exceptions"].includes(batchResult.data.batch_status)
+    ) {
+      return archiveErrorState(
+        "Posted imports cannot be archived from upload history. Use the replacement or reactivation workflow instead."
+      );
+    }
+
+    const now = new Date().toISOString();
+    const batchUpdate = await adminClient
+      .from("import_batches")
+      .update({
+        active_status: "inactive",
+        batch_status: "archived",
+        is_active_for_reporting: false,
+        reporting_status: "excluded",
+        updated_at: now,
+        updated_by: appUser.user_id,
+        metadata: {
+          ...(batchResult.data.metadata ?? {}),
+          archived_at: now,
+          archived_by: appUser.user_id,
+          archive_reason: reason || null,
+          raw_file_retained: true
+        }
+      })
+      .eq("organization_id", appUser.organization_id)
+      .eq("import_batch_id", importBatchId);
+
+    if (batchUpdate.error) {
+      return archiveErrorState(batchUpdate.error.message);
+    }
+
+    if (batchResult.data.source_file_id) {
+      const sourceFileResult = await adminClient
+        .from("source_files")
+        .select("metadata")
+        .eq("organization_id", appUser.organization_id)
+        .eq("source_file_id", batchResult.data.source_file_id)
+        .maybeSingle<{ metadata: Record<string, unknown> | null }>();
+
+      if (sourceFileResult.error) {
+        return archiveErrorState(sourceFileResult.error.message);
+      }
+
+      const sourceFileUpdate = await adminClient
+        .from("source_files")
+        .update({
+          active_status: "inactive",
+          updated_at: now,
+          metadata: {
+            ...(sourceFileResult.data?.metadata ?? {}),
+            archived_at: now,
+            archived_by: appUser.user_id,
+            archive_reason: reason || null,
+            retained_unchanged: true
+          }
+        })
+        .eq("organization_id", appUser.organization_id)
+        .eq("source_file_id", batchResult.data.source_file_id);
+
+      if (sourceFileUpdate.error) {
+        return archiveErrorState(sourceFileUpdate.error.message);
+      }
+    }
+
+    await adminClient.from("audit_logs").insert({
+      organization_id: appUser.organization_id,
+      actor_user_id: appUser.user_id,
+      action_type: "upload_archived",
+      entity_table: "import_batches",
+      entity_id: importBatchId,
+      after_payload: {
+        archive_reason: reason || null,
+        source_file_id: batchResult.data.source_file_id,
+        raw_file_retained: true
+      },
+      metadata: {
+        slice: "upload_archive",
+        physical_delete: false
+      }
+    });
+
+    revalidatePath("/imports");
+    revalidatePath(`/imports/${importBatchId}/review`);
+    revalidatePath("/imports/templates/new");
+
+    return {
+      ...initialArchiveImportState,
+      message:
+        "Upload archived. The raw file was retained, but the upload is now inactive and hidden from default import workflows.",
+      status: "success"
+    };
+  } catch (error) {
+    return archiveErrorState(
+      error instanceof Error ? error.message : "Upload could not be archived."
     );
   }
 }
@@ -276,5 +424,12 @@ function errorState(message: string): UploadSourceFileState {
   return {
     status: "error",
     message
+  };
+}
+
+function archiveErrorState(message: string): ArchiveImportState {
+  return {
+    message,
+    status: "error"
   };
 }

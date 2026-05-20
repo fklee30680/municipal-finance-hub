@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
+import { ArchiveImportAction } from "@/components/archive-import-action";
 import { RequestReactivationAction } from "@/components/trial-balance-posting-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ensureAppUserForAuthUser } from "@/lib/auth/app-user";
@@ -238,6 +239,11 @@ export default async function ImportReviewPage({
     ["inactive", "superseded"].includes(batch.batch_status) ||
     batch.active_status === "inactive" ||
     !batch.is_active_for_reporting;
+  const canArchive =
+    !batch.is_active_for_reporting &&
+    !["archived", "posted", "posted_with_exceptions", "superseded"].includes(
+      batch.batch_status
+    );
 
   return (
     <AppShell>
@@ -468,6 +474,24 @@ export default async function ImportReviewPage({
                   : "."}
               </p>
             ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Archive bad upload</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Archive a bad or accidental upload without deleting the raw file.
+              Archived uploads are inactive and hidden from default import
+              workflows, but they remain available when inactive records are
+              included.
+            </p>
+            <ArchiveImportAction
+              disabled={!canArchive}
+              importBatchId={batch.import_batch_id}
+            />
           </CardContent>
         </Card>
 

@@ -249,7 +249,7 @@ export default async function ImportsPage({
                       <th className="py-3 font-medium">Preview</th>
                       <th className="py-3 font-medium">Validation</th>
                       <th className="py-3 font-medium">Posting</th>
-                      <th className="py-3 font-medium">Review</th>
+                      <th className="py-3 font-medium">Review / Archive</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -383,7 +383,12 @@ export default async function ImportsPage({
                               className="text-sm font-medium text-primary hover:underline"
                               href={`/imports/${batch.import_batch_id}/review`}
                             >
-                              Review
+                              {batch.is_active_for_reporting ||
+                              ["posted", "posted_with_exceptions"].includes(
+                                batch.batch_status
+                              )
+                                ? "Review"
+                                : "Review / Archive"}
                             </Link>
                           </td>
                         </tr>

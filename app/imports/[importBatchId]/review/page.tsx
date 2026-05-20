@@ -332,6 +332,24 @@ export default async function ImportReviewPage({
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle>Archive bad upload</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Archive a bad or accidental upload without deleting the raw file.
+              Archived uploads are inactive and hidden from default import
+              workflows, but they remain available when inactive records are
+              included.
+            </p>
+            <ArchiveImportAction
+              disabled={!canArchive}
+              importBatchId={batch.import_batch_id}
+            />
+          </CardContent>
+        </Card>
+
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
@@ -474,24 +492,6 @@ export default async function ImportReviewPage({
                   : "."}
               </p>
             ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Archive bad upload</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Archive a bad or accidental upload without deleting the raw file.
-              Archived uploads are inactive and hidden from default import
-              workflows, but they remain available when inactive records are
-              included.
-            </p>
-            <ArchiveImportAction
-              disabled={!canArchive}
-              importBatchId={batch.import_batch_id}
-            />
           </CardContent>
         </Card>
 

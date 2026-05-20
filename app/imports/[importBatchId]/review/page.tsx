@@ -37,7 +37,7 @@ type ImportBatchDetail = {
   source_files: Related<{
     source_file_id: string;
     original_file_name: string;
-    file_hash: string | null;
+    checksum_sha256: string | null;
   }>;
   import_template_versions: Related<{
     template_version_id: string;
@@ -139,7 +139,7 @@ export default async function ImportReviewPage({
       source_files (
         source_file_id,
         original_file_name,
-        file_hash
+        checksum_sha256
       ),
       import_template_versions (
         template_version_id,
@@ -283,7 +283,7 @@ export default async function ImportReviewPage({
           <CardContent className="grid gap-4 text-sm md:grid-cols-3">
             <InfoItem label="Import batch" value={batch.import_batch_id} />
             <InfoItem label="Source file" value={sourceFile?.original_file_name} />
-            <InfoItem label="Source file hash" value={sourceFile?.file_hash} />
+            <InfoItem label="Source file hash" value={sourceFile?.checksum_sha256} />
             <InfoItem label="Import type" value={importType?.import_type_name} />
             <InfoItem label="Fiscal year" value={batch.fiscal_year ?? "Not provided"} />
             <InfoItem label="Period" value={batch.period ?? "Not provided"} />

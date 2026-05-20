@@ -131,7 +131,11 @@ async function saveTemplateVersion({
             templateId: templateRecord.templateId
           });
 
-    const sheetConfigs = collectSheetConfigs(formData, sheetCount);
+    const sheetConfigs = collectSheetConfigs({
+      formData,
+      importTypeCode: importType.import_type_code,
+      sheetCount
+    });
 
     if (isSupportedMappingImportType(importType.import_type_code)) {
       const activeSheetCount = sheetConfigs.filter((sheet) => !sheet.ignoreSheet).length;
@@ -427,7 +431,17 @@ async function getNextVersionNumber({
   return (latestVersion.data?.version_number ?? 0) + 1;
 }
 
-function collectSheetConfigs(formData: FormData, sheetCount: number) {
+function collectSheetConfigs({
+  formData,
+  importTypeCode,
+  sheetCount
+}: {
+  formData: FormData;
+  importTypeCode: string;
+  sheetCount: number;
+}) {
+  const requiredTargetFields = new Set(getRequiredTargetFieldNames(importTypeCode));
+
   return Array.from({ length: sheetCount }, (_, sheetIndex) => {
     const columnCount = parseInteger(
       getStringValue(formData.get(`sheet_${sheetIndex}_columnCount`)),
@@ -468,9 +482,7 @@ function collectSheetConfigs(formData: FormData, sheetCount: number) {
           defaultValue: getStringValue(
             formData.get(`sheet_${sheetIndex}_column_${columnIndex}_default`)
           ),
-          required: formData.get(
-            `sheet_${sheetIndex}_column_${columnIndex}_required`
-          ) === "true"
+          required: requiredTargetFields.has(targetFieldName)
         };
       })
     };

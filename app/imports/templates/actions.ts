@@ -124,7 +124,7 @@ async function saveTemplateVersion({
     }
 
     const nextVersionNumber =
-      mode === "create"
+      mode === "create" && templateRecord.createdNew
         ? 1
         : await getNextVersionNumber({
             adminClient,
@@ -287,7 +287,7 @@ async function saveTemplateVersion({
       organization_id: appUser.organization_id,
       actor_user_id: appUser.user_id,
       action_type:
-        mode === "create"
+        mode === "create" && templateRecord.createdNew
           ? "import_template_created"
           : "import_template_version_created",
       entity_table: "import_template_versions",
@@ -310,7 +310,11 @@ async function saveTemplateVersion({
 
     return {
       status: "success",
-      message: `Template version ${nextVersionNumber} saved. This configuration has not parsed, validated, posted, or activated financial data.`
+      message: `${
+        mode === "create" && !templateRecord.createdNew
+          ? "Existing template name found, so a new version was created."
+          : "Template"
+      } version ${nextVersionNumber} saved. This configuration has not parsed, validated, posted, or activated financial data.`
     };
   } catch (error) {
     return errorState(
@@ -338,6 +342,29 @@ async function createTemplateRecord({
   templateName: string;
   userId: string;
 }) {
+  const existingTemplate = await adminClient
+    .from("import_templates")
+    .select("import_template_id")
+    .eq("organization_id", organizationId)
+    .eq("import_type_id", importTypeId)
+    .eq("template_name", templateName)
+    .maybeSingle<{ import_template_id: string }>();
+
+  if (existingTemplate.error) {
+    return {
+      ok: false as const,
+      message: existingTemplate.error.message
+    };
+  }
+
+  if (existingTemplate.data) {
+    return {
+      createdNew: false,
+      ok: true as const,
+      templateId: existingTemplate.data.import_template_id
+    };
+  }
+
   const insertResult = await adminClient
     .from("import_templates")
     .insert({
@@ -354,6 +381,24 @@ async function createTemplateRecord({
     .single<{ import_template_id: string }>();
 
   if (insertResult.error) {
+    if (insertResult.error.code === "23505") {
+      const duplicateTemplate = await adminClient
+        .from("import_templates")
+        .select("import_template_id")
+        .eq("organization_id", organizationId)
+        .eq("import_type_id", importTypeId)
+        .eq("template_name", templateName)
+        .maybeSingle<{ import_template_id: string }>();
+
+      if (!duplicateTemplate.error && duplicateTemplate.data) {
+        return {
+          createdNew: false,
+          ok: true as const,
+          templateId: duplicateTemplate.data.import_template_id
+        };
+      }
+    }
+
     return {
       ok: false as const,
       message: insertResult.error.message
@@ -361,6 +406,7 @@ async function createTemplateRecord({
   }
 
   return {
+    createdNew: true,
     ok: true as const,
     templateId: insertResult.data.import_template_id
   };
@@ -404,6 +450,7 @@ async function getTemplateRecord({
   }
 
   return {
+    createdNew: false,
     ok: true as const,
     templateId: templateResult.data.import_template_id
   };

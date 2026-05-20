@@ -48,9 +48,13 @@ Slice 6 explicitly does not support multi-sheet mapping package imports. One map
 
 Implement trial balance validation against Slice 5 preview rows using committed Slice 6 mapping/reference data. Validation creates `validation_runs`, carries forward preview issues into validation exceptions, records mapping versions used, supports exception review/export, and allows warning acknowledgement only where allowed. Slice 7 determines posting eligibility only; it does not post rows, activate data, replace periods, calculate analysis outputs, update dashboards, generate reports, import budgets, or add AI commentary.
 
-## Slice 8: Data Review Tables
+## Slice 8: Post Validated Trial Balance and Data Review
 
-Create period and import review screens for normalized financial records.
+Post eligible Slice 7 trial balance validation results into governed active reporting tables. Posting consumes validated preview rows, creates normalized `trial_balance_lines` and `trial_balance_line_segments`, records posting runs, preserves mapping-version and warning-acknowledgement traceability, and adds import/period review screens.
+
+Slice 8 also blocks silent active-period overwrites. When active data already exists for the same fiscal year and period, users must request replacement. Approved replacement supersedes/inactivates old rows without physical deletion, then posts the replacement import. Reactivation requires request, approval, conflict checking, and audit history.
+
+Slice 8 does not run calculations, build dashboards, generate reports, import budgets, or add AI commentary.
 
 ## Slice 9: Analysis Outputs
 

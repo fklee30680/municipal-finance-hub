@@ -44,6 +44,12 @@ const validationMigrationPath = join(
   "migrations",
   "20260519023954_trial_balance_validation.sql"
 );
+const postingMigrationPath = join(
+  root,
+  "supabase",
+  "migrations",
+  "20260519234331_post_validated_trial_balance.sql"
+);
 
 const requiredTables = [
   "organizations",
@@ -299,6 +305,31 @@ if (!existsSync(validationMigrationPath)) {
   }
 }
 
+if (!existsSync(postingMigrationPath)) {
+  fail(`Missing posting migration: ${postingMigrationPath}`);
+} else {
+  const postingSql = readFileSync(postingMigrationPath, "utf8");
+  const postingSnippets = [
+    "create table if not exists public.posting_runs",
+    "create table if not exists public.posting_run_mapping_versions",
+    "add column if not exists validation_run_id",
+    "add column if not exists posting_run_id",
+    "add column if not exists active_status",
+    "add column if not exists segment_position",
+    "posted_with_exceptions",
+    "replacement_import_batch_id",
+    "conflict_status",
+    "create or replace view public.active_trial_balance_lines",
+    "idx_trial_balance_lines_active_period"
+  ];
+
+  for (const snippet of postingSnippets) {
+    if (!postingSql.includes(snippet)) {
+      fail(`Missing required posting migration content: ${snippet}`);
+    }
+  }
+}
+
 const requiredDocs = [
   "docs/product-spec.md",
   "docs/build-plan.md",
@@ -310,6 +341,7 @@ const requiredDocs = [
   "docs/trial-balance-preview.md",
   "docs/mapping-imports.md",
   "docs/trial-balance-validation.md",
+  "docs/posting-and-data-review.md",
   "TASKS.md"
 ];
 
@@ -696,6 +728,95 @@ if (existsSync(validationPagePath)) {
   for (const snippet of validationPageSnippets) {
     if (!validationPage.includes(snippet)) {
       fail(`Missing validation page content: ${snippet}`);
+    }
+  }
+}
+
+const postingFiles = [
+  "app/imports/[importBatchId]/post/page.tsx",
+  "app/imports/[importBatchId]/post/actions.ts",
+  "app/imports/[importBatchId]/review/page.tsx",
+  "app/imports/periods/page.tsx",
+  "app/imports/replacement-requests/page.tsx",
+  "app/imports/replacement-requests/actions.ts",
+  "app/imports/reactivation-requests/page.tsx",
+  "app/imports/reactivation-requests/actions.ts",
+  "components/trial-balance-posting-actions.tsx",
+  "lib/imports/trial-balance-posting.ts",
+  "lib/imports/posting-state.ts",
+  "lib/auth/permissions.ts"
+];
+
+for (const file of postingFiles) {
+  if (!existsSync(join(root, file))) {
+    fail(`Missing trial balance posting file: ${file}`);
+  }
+}
+
+const postingEnginePath = join(root, "lib", "imports", "trial-balance-posting.ts");
+if (existsSync(postingEnginePath)) {
+  const postingEngine = readFileSync(postingEnginePath, "utf8");
+  const postingEngineSnippets = [
+    "postValidatedTrialBalance",
+    "loadLatestValidationRun",
+    "import_preview_rows",
+    "posting_runs",
+    "posting_run_mapping_versions",
+    "trial_balance_lines",
+    "trial_balance_line_segments",
+    "findActivePeriodImport",
+    "requestReplacement",
+    "approveReplacementRequest",
+    "requestReactivation",
+    "approveReactivationRequest",
+    "is_active_for_reporting: true",
+    "active_status: \"active\"",
+    "import_posted"
+  ];
+
+  for (const snippet of postingEngineSnippets) {
+    if (!postingEngine.includes(snippet)) {
+      fail(`Missing posting engine content: ${snippet}`);
+    }
+  }
+}
+
+const postingPagePath = join(root, "app", "imports", "[importBatchId]", "post", "page.tsx");
+if (existsSync(postingPagePath)) {
+  const postingPage = readFileSync(postingPagePath, "utf8");
+  const postingPageSnippets = [
+    "Post Validated Trial Balance",
+    "Posting context",
+    "Period conflict",
+    "RequestReplacementAction",
+    "Posting confirmation",
+    "Post Validated Trial Balance"
+  ];
+
+  for (const snippet of postingPageSnippets) {
+    if (!postingPage.includes(snippet)) {
+      fail(`Missing posting page content: ${snippet}`);
+    }
+  }
+}
+
+const importReviewPagePath = join(root, "app", "imports", "[importBatchId]", "review", "page.tsx");
+if (existsSync(importReviewPagePath)) {
+  const importReviewPage = readFileSync(importReviewPagePath, "utf8");
+  const reviewSnippets = [
+    "Import Review",
+    "Import lineage",
+    "Validation summary",
+    "Posting summary",
+    "Mapping versions",
+    "Warning acknowledgement trail",
+    "Reactivation",
+    "Audit summary"
+  ];
+
+  for (const snippet of reviewSnippets) {
+    if (!importReviewPage.includes(snippet)) {
+      fail(`Missing import review page content: ${snippet}`);
     }
   }
 }

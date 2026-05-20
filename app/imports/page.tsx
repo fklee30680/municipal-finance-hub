@@ -13,6 +13,9 @@ type ImportBatchRow = {
   fiscal_year: number | null;
   period: number | null;
   batch_status: string;
+  active_status: string;
+  reporting_status: string;
+  is_active_for_reporting: boolean;
   template_version_id: string | null;
   warning_count: number;
   created_at: string;
@@ -55,12 +58,18 @@ type ImportBatchRow = {
     | null;
 };
 
-export default async function ImportsPage() {
+export default async function ImportsPage({
+  searchParams
+}: {
+  searchParams: Promise<{ includeInactive?: string }>;
+}) {
+  const filters = await searchParams;
+  const includeInactive = filters.includeInactive === "true";
   const authUser = await requireUser();
   const adminClient = createAdminClient();
   const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
 
-  const batchesResult = await adminClient
+  let batchesQuery = adminClient
     .from("import_batches")
     .select(
       `
@@ -68,6 +77,9 @@ export default async function ImportsPage() {
       fiscal_year,
       period,
       batch_status,
+      active_status,
+      reporting_status,
+      is_active_for_reporting,
       template_version_id,
       warning_count,
       created_at,
@@ -88,8 +100,15 @@ export default async function ImportsPage() {
     )
     .eq("organization_id", appUser.organization_id)
     .order("created_at", { ascending: false })
-    .limit(50)
-    .returns<ImportBatchRow[]>();
+    .limit(50);
+
+  if (!includeInactive) {
+    batchesQuery = batchesQuery
+      .not("batch_status", "in", "(inactive,superseded,archived,rejected)")
+      .neq("active_status", "inactive");
+  }
+
+  const batchesResult = await batchesQuery.returns<ImportBatchRow[]>();
 
   const batches = batchesResult.data ?? [];
 
@@ -115,6 +134,24 @@ export default async function ImportsPage() {
               href="/imports/reference"
             >
               Reference Imports
+            </Link>
+            <Link
+              className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              href="/imports/periods"
+            >
+              Period Review
+            </Link>
+            <Link
+              className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              href="/imports/replacement-requests"
+            >
+              Replacement Requests
+            </Link>
+            <Link
+              className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              href="/imports/reactivation-requests"
+            >
+              Reactivation Requests
             </Link>
             <Link
               className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
@@ -171,7 +208,15 @@ export default async function ImportsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Upload history</CardTitle>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <CardTitle>Upload history</CardTitle>
+              <Link
+                className="text-sm font-medium text-primary hover:underline"
+                href={includeInactive ? "/imports" : "/imports?includeInactive=true"}
+              >
+                {includeInactive ? "Show active/recent only" : "Include inactive/superseded"}
+              </Link>
+            </div>
           </CardHeader>
           <CardContent>
             {batchesResult.error ? (
@@ -188,7 +233,7 @@ export default async function ImportsPage() {
 
             {batches.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[1300px] border-collapse text-left text-sm">
                   <thead>
                     <tr className="border-b border-border text-muted-foreground">
                       <th className="py-3 pr-4 font-medium">File name</th>
@@ -203,6 +248,8 @@ export default async function ImportsPage() {
                       <th className="py-3 font-medium">Template</th>
                       <th className="py-3 font-medium">Preview</th>
                       <th className="py-3 font-medium">Validation</th>
+                      <th className="py-3 font-medium">Posting</th>
+                      <th className="py-3 font-medium">Review</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -233,6 +280,12 @@ export default async function ImportsPage() {
                           </td>
                           <td className="py-3 pr-4 text-muted-foreground">
                             {batch.batch_status}
+                            {!batch.is_active_for_reporting &&
+                            ["posted", "posted_with_exceptions"].includes(
+                              batch.batch_status
+                            )
+                              ? " (inactive)"
+                              : ""}
                           </td>
                           <td className="py-3 pr-4 text-muted-foreground">
                             {sourceFile?.metadata?.uploaded_by_email ??
@@ -310,6 +363,28 @@ export default async function ImportsPage() {
                                 Not available
                               </span>
                             )}
+                          </td>
+                          <td className="py-3">
+                            {importType?.import_type_code === "trial_balance" ? (
+                              <Link
+                                className="text-sm font-medium text-primary hover:underline"
+                                href={`/imports/${batch.import_batch_id}/post`}
+                              >
+                                Post / Replace
+                              </Link>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                Not available
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3">
+                            <Link
+                              className="text-sm font-medium text-primary hover:underline"
+                              href={`/imports/${batch.import_batch_id}/review`}
+                            >
+                              Review
+                            </Link>
                           </td>
                         </tr>
                       );

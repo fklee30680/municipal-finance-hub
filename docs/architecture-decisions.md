@@ -100,3 +100,17 @@
 - Use an isolated MVP sign convention for validation formula checks so Slice 9 can replace it with configurable calculation rules later.
 - Update import batches to validation statuses only: `validation_failed`, `validated_with_warnings`, or `validated`.
 - Continue excluding posting, active reporting rows, replacement execution, calculations, dashboards, reports, budget import, and AI commentary.
+
+## Slice 8 Posting and Data Review Decisions
+
+- Post only `trial_balance` import batches with a completed eligible validation run.
+- Consume validated preview rows for posting; do not reread raw files or reinterpret templates during posting.
+- Store posting history in `posting_runs` and link posting runs to mapping versions where available.
+- Write active reporting data to `trial_balance_lines` and generic segment rows to `trial_balance_line_segments`.
+- Preserve lineage to source file, import batch, template version, account structure, validation run, posting run, and mapping versions.
+- Set `is_active_for_reporting = true` only after posting succeeds.
+- Block normal posting when another active posted import exists for the same organization, fiscal year, and period.
+- Use replacement requests and approval to supersede old active period data without physically deleting old rows or files.
+- Use reactivation requests and approval with conflict checks before making inactive/superseded imports active again.
+- Exclude inactive and superseded imports from default active views while keeping them visible through review filters.
+- Continue excluding calculations, dashboards, reports, budget import, and AI commentary.

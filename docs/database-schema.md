@@ -24,6 +24,30 @@ Slice 4 adds template-builder support:
 supabase/migrations/20260517000400_template_builder_support.sql
 ```
 
+Slice 5 adds trial balance preview support:
+
+```text
+supabase/migrations/20260517000500_trial_balance_preview.sql
+```
+
+Slice 6 adds mapping/reference import support:
+
+```text
+supabase/migrations/20260517000600_mapping_reference_imports.sql
+```
+
+Slice 7 adds trial balance validation support:
+
+```text
+supabase/migrations/20260519023954_trial_balance_validation.sql
+```
+
+Slice 8 adds posting and data review support:
+
+```text
+supabase/migrations/20260519234331_post_validated_trial_balance.sql
+```
+
 ## Migration Scope
 
 The migration creates foundations for:
@@ -96,6 +120,18 @@ Slice 6 adds:
 - Import source metadata columns on mapping/reference tables for future manual maintenance compatibility.
 - Import batch, source file, template version, and change description metadata on `mapping_versions`.
 
+Slice 8 adds:
+
+- `posting_runs` for governed posting executions.
+- `posting_run_mapping_versions` for mapping-version lineage at posting time.
+- Validation and posting lineage fields on `trial_balance_lines`.
+- Active/superseded status on `trial_balance_lines`.
+- Segment position, name, and type fields on `trial_balance_line_segments`.
+- Additional replacement metadata on `inactivation_requests`.
+- Additional approval/conflict metadata on `reactivation_requests`.
+- `posted_with_exceptions`, `inactive`, and `rejected` import batch statuses.
+- An updated `active_trial_balance_lines` view that includes posted-with-exceptions batches and excludes inactive/superseded rows.
+
 ## Reporting Defaults
 
 Standard reporting should use active, posted, included imports. The migration creates `public.active_trial_balance_lines` as the default view for active posted actuals. Inactive and superseded import batches are excluded from that view.
@@ -140,6 +176,14 @@ Slice 7 adds validation persistence for previewed trial balance imports:
 Slice 7 validation rows remain non-posted. Import batches can move to validation statuses, but they remain excluded from reporting and inactive for reporting until Slice 8 posting.
 
 Rejected rows are excluded from commit and retained in the bad-data report.
+
+## Posting and Data Review
+
+Slice 8 is the first slice that can make trial balance rows active for reporting. Posting consumes validated preview rows from Slice 5/Slice 7 lineage and writes normalized rows into `trial_balance_lines` plus parsed segment rows into `trial_balance_line_segments`.
+
+Posted rows remain traceable to source file, import batch, template version, account structure, validation run, posting run, and mapping versions. Raw files, preview rows, validation exceptions, warning acknowledgements, and audit logs are preserved.
+
+Normal posting is blocked if active posted data already exists for the same organization, fiscal year, and period. Replacement uses request/approval and supersession/inactivation rather than physical deletion. Reactivation also requires request/approval and a conflict check.
 
 ## Deferred
 

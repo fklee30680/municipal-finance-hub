@@ -69,7 +69,11 @@ Slice 5 adds trial balance preview parsing for CSV and Excel source files using 
 
 Slice 6 adds one-mapping-type-at-a-time reference imports for funds, objects, ACFR mappings, departments, and functions. Mapping imports preview bad data before commit, create mapping versions, and do not post trial balance activity.
 
-Slice 0 intentionally does not implement imports, mappings, validation, finance calculations, dashboards, report generation, budget functionality, role workflows, or AI commentary.
+Slice 7 adds trial balance validation and exception review. Validation determines posting eligibility, carries forward preview issues, checks committed mappings, and stores warning acknowledgements, but it does not post data.
+
+Slice 8 adds governed posting and data review for validated trial balance imports. Posted rows become active for future reporting only after successful posting; replacement and reactivation require request/approval workflows and conflict checks.
+
+Current slices still intentionally do not implement finance calculations, dashboards, report generation, budget functionality, or AI commentary.
 
 ## Documentation
 
@@ -83,6 +87,8 @@ Slice 0 intentionally does not implement imports, mappings, validation, finance 
 - `docs/template-builder.md`
 - `docs/trial-balance-preview.md`
 - `docs/mapping-imports.md`
+- `docs/trial-balance-validation.md`
+- `docs/posting-and-data-review.md`
 - `TASKS.md`
 
 ## Deployment Target

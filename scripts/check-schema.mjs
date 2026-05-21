@@ -711,6 +711,25 @@ if (existsSync(mappingImportPagePath)) {
   }
 }
 
+const referenceImportPagePath = join(root, "app", "imports", "reference", "[referenceType]", "page.tsx");
+if (existsSync(referenceImportPagePath)) {
+  const referenceImportPage = readFileSync(referenceImportPagePath, "utf8");
+  const fundImportUxSnippets = [
+    "Fund List Update",
+    "Import Fund List",
+    "Search Funds",
+    "MappingPreviewAction",
+    "MappingCommitAction",
+    "renderGenericReferencePage"
+  ];
+
+  for (const snippet of fundImportUxSnippets) {
+    if (!referenceImportPage.includes(snippet)) {
+      fail(`Missing fund import UX content: ${snippet}`);
+    }
+  }
+}
+
 const validationFiles = [
   "app/imports/[importBatchId]/validation/page.tsx",
   "app/imports/[importBatchId]/validation/actions.ts",

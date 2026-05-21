@@ -12,6 +12,9 @@ export type UploadSourceFileState = {
     fileHash: string;
     uploadedAt: string;
     importBatchStatus: string;
+    sourceFileId: string;
+    importBatchId: string;
+    importTypeCode: string;
   };
 };
 

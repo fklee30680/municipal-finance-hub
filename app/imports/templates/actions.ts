@@ -494,6 +494,69 @@ function collectSheetConfigs({
       getStringValue(formData.get(`sheet_${sheetIndex}_columnCount`)),
       0
     );
+    const manualCount = parseInteger(
+      getStringValue(formData.get(`sheet_${sheetIndex}_manualCount`)),
+      0
+    );
+    const detectedColumns = Array.from({ length: columnCount }, (_, columnIndex) => {
+      const targetFieldName = getStringValue(
+        formData.get(`sheet_${sheetIndex}_column_${columnIndex}_target`)
+      );
+
+      return {
+        sourceColumnIndex: parseInteger(
+          getStringValue(
+            formData.get(`sheet_${sheetIndex}_column_${columnIndex}_index`)
+          ),
+          columnIndex
+        ),
+        sourceColumnName: getStringValue(
+          formData.get(`sheet_${sheetIndex}_column_${columnIndex}_name`)
+        ),
+        targetFieldName,
+        defaultValue: getStringValue(
+          formData.get(`sheet_${sheetIndex}_column_${columnIndex}_default`)
+        ),
+        required: requiredTargetFields.has(targetFieldName)
+      };
+    });
+    const manualColumns = Array.from({ length: manualCount }, (_, manualIndex) => {
+      const targetFieldName = getStringValue(
+        formData.get(`sheet_${sheetIndex}_manual_${manualIndex}_target`)
+      );
+      const sourceColumnName = getStringValue(
+        formData.get(`sheet_${sheetIndex}_manual_${manualIndex}_name`)
+      );
+      const sourceColumnLetter = getStringValue(
+        formData.get(`sheet_${sheetIndex}_manual_${manualIndex}_letter`)
+      );
+      const sourceColumnNumber = getStringValue(
+        formData.get(`sheet_${sheetIndex}_manual_${manualIndex}_number`)
+      );
+      const sourceColumnIndex = getManualColumnIndex({
+        sourceColumnLetter,
+        sourceColumnNumber
+      });
+
+      return {
+        sourceColumnIndex,
+        sourceColumnName:
+          sourceColumnName ||
+          (sourceColumnLetter ? `Column ${sourceColumnLetter.toUpperCase()}` : "") ||
+          (sourceColumnNumber ? `Column ${sourceColumnNumber}` : ""),
+        targetFieldName,
+        defaultValue: getStringValue(
+          formData.get(`sheet_${sheetIndex}_manual_${manualIndex}_default`)
+        ),
+        required: requiredTargetFields.has(targetFieldName)
+      };
+    }).filter(
+      (column) =>
+        column.sourceColumnName ||
+        column.sourceColumnIndex !== null ||
+        column.targetFieldName ||
+        column.defaultValue
+    );
 
     return {
       sheetName: getStringValue(formData.get(`sheet_${sheetIndex}_name`)),
@@ -510,28 +573,7 @@ function collectSheetConfigs({
         getStringValue(formData.get(`sheet_${sheetIndex}_dataStartRow`)),
         2
       ),
-      columns: Array.from({ length: columnCount }, (_, columnIndex) => {
-        const targetFieldName = getStringValue(
-          formData.get(`sheet_${sheetIndex}_column_${columnIndex}_target`)
-        );
-
-        return {
-          sourceColumnIndex: parseInteger(
-            getStringValue(
-              formData.get(`sheet_${sheetIndex}_column_${columnIndex}_index`)
-            ),
-            columnIndex
-          ),
-          sourceColumnName: getStringValue(
-            formData.get(`sheet_${sheetIndex}_column_${columnIndex}_name`)
-          ),
-          targetFieldName,
-          defaultValue: getStringValue(
-            formData.get(`sheet_${sheetIndex}_column_${columnIndex}_default`)
-          ),
-          required: requiredTargetFields.has(targetFieldName)
-        };
-      })
+      columns: [...detectedColumns, ...manualColumns]
     };
   }).filter((sheet) => sheet.sheetName);
 }
@@ -563,6 +605,39 @@ function getStringValue(value: FormDataEntryValue | null) {
 function parseInteger(value: string, fallback: number) {
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function getManualColumnIndex({
+  sourceColumnLetter,
+  sourceColumnNumber
+}: {
+  sourceColumnLetter: string;
+  sourceColumnNumber: string;
+}) {
+  const parsedNumber = Number.parseInt(sourceColumnNumber, 10);
+
+  if (!Number.isNaN(parsedNumber) && parsedNumber > 0) {
+    return parsedNumber - 1;
+  }
+
+  if (sourceColumnLetter) {
+    const parsedLetter = columnLetterToIndex(sourceColumnLetter);
+    return parsedLetter >= 0 ? parsedLetter : null;
+  }
+
+  return null;
+}
+
+function columnLetterToIndex(value: string) {
+  const normalized = value.trim().toUpperCase().replace(/[^A-Z]/g, "");
+
+  if (!normalized) {
+    return -1;
+  }
+
+  return normalized.split("").reduce((index, character) => {
+    return index * 26 + character.charCodeAt(0) - 64;
+  }, 0) - 1;
 }
 
 function errorState(message: string): TemplateSaveState {

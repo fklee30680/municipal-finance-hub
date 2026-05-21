@@ -56,6 +56,19 @@ Slice 8 also blocks silent active-period overwrites. When active data already ex
 
 Slice 8 does not run calculations, build dashboards, generate reports, import budgets, or add AI commentary.
 
+## Import Workspace UX Improvement
+
+After Slice 8, the import workflow is consolidated into a guided Import
+Workspace. The workspace follows the cleaner invoice-management pattern: file,
+header row, header preview, column mapping, manual column override, options,
+preview/review, and commit/post.
+
+This is a UX consolidation only. It preserves raw source files, import batches,
+template versions, preview rows, validation runs, exception reports, mapping
+versions, posting runs, and audit lineage. Advanced import, template, preview,
+validation, mapping review, posting, and archive/review pages remain available
+for detailed follow-up.
+
 ## Slice 9: Analysis Outputs
 
 Implement reproducible trend and variance calculations after normalized data exists.

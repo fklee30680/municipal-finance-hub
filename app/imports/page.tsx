@@ -122,10 +122,10 @@ export default async function ImportsPage({
               Imports
             </h1>
             <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              Choose a guided import lane for reference data, or use the
-              general upload history for raw source files and trial balance
-              work. Reference imports are reviewed before accepted rows are
-              committed.
+              Use the import workspace for upload, file layout, template
+              mapping, preview, validation, and commit/post actions. Advanced
+              history and review pages are still available when you need the
+              full audit trail.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -163,7 +163,7 @@ export default async function ImportsPage({
               className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
               href="/imports/new"
             >
-              General Upload
+              Import Workspace
             </Link>
           </div>
         </div>
@@ -193,14 +193,15 @@ export default async function ImportsPage({
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm leading-6 text-muted-foreground">
-                Trial balances continue to use the raw upload, template, and
-                preview workflow. Preview is not validation or posting.
+                Trial balances now use the Import Workspace for upload,
+                template mapping, preview, validation, and posting actions.
+                Preview is still not validation or posting.
               </p>
               <Link
                 className="text-sm font-medium text-primary hover:underline"
                 href="/imports/new?importTypeCode=trial_balance"
               >
-                Upload Trial Balance
+                Open Trial Balance Workspace
               </Link>
             </CardContent>
           </Card>
@@ -250,6 +251,7 @@ export default async function ImportsPage({
                       <th className="py-3 font-medium">Validation</th>
                       <th className="py-3 font-medium">Posting</th>
                       <th className="py-3 font-medium">Review / Archive</th>
+                      <th className="py-3 font-medium">Workspace</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -390,6 +392,18 @@ export default async function ImportsPage({
                                 ? "Review"
                                 : "Review / Archive"}
                             </Link>
+                          </td>
+                          <td className="py-3">
+                            {sourceFile?.source_file_id && importType?.import_type_code ? (
+                              <Link
+                                className="text-sm font-medium text-primary hover:underline"
+                                href={`/imports/new?importBatchId=${batch.import_batch_id}&sourceFileId=${sourceFile.source_file_id}&importTypeCode=${importType.import_type_code}`}
+                              >
+                                Continue
+                              </Link>
+                            ) : (
+                              <span className="text-muted-foreground">Unavailable</span>
+                            )}
                           </td>
                         </tr>
                       );

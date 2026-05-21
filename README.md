@@ -73,6 +73,8 @@ Slice 7 adds trial balance validation and exception review. Validation determine
 
 Slice 8 adds governed posting and data review for validated trial balance imports. Posted rows become active for future reporting only after successful posting; replacement and reactivation require request/approval workflows and conflict checks.
 
+The Import Workspace improves the user path across the completed import slices. Users can upload or resume a source file, inspect headers/sheets, map columns with detected or manual column references, save templates, preview, validate/review, and commit/post from one guided workspace while the governed backend records remain intact.
+
 Current slices still intentionally do not implement finance calculations, dashboards, report generation, budget functionality, or AI commentary.
 
 ## Documentation
@@ -89,6 +91,7 @@ Current slices still intentionally do not implement finance calculations, dashbo
 - `docs/mapping-imports.md`
 - `docs/trial-balance-validation.md`
 - `docs/posting-and-data-review.md`
+- `docs/import-workspace.md`
 - `TASKS.md`
 
 ## Deployment Target

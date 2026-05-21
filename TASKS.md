@@ -9,6 +9,7 @@
 - [x] Slice 6: Mapping and reference imports. Local schema, lint, typecheck, and build checks passed; Supabase local lint could not connect because the local Supabase database is not running.
 - [x] Slice 7: Trial balance validation and exception review. Local schema, lint, typecheck, and build checks passed; Supabase local lint could not connect because the local Supabase database is not running.
 - [x] Slice 8: Post validated trial balance and data review. Local schema, lint, typecheck, and build checks passed; npm test script is not defined; Supabase local lint could not connect because the local Supabase database is not running.
+- [x] Import Workspace UX improvement: Consolidate upload, layout, mapping, preview, validation/review, and commit/post into one guided import workspace. Local schema, lint, typecheck, and build checks passed; npm test script is not defined.
 - [ ] Slice 9: Analysis outputs.
 - [ ] Slice 10: Dashboard views backed by governed data.
 - [ ] Slice 11: Monthly report drafting.

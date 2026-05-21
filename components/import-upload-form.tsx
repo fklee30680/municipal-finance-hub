@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -151,24 +152,32 @@ export function ImportUploadForm({
           ) : null}
 
           {state.upload ? (
-            <dl className="space-y-3 text-sm">
-              {Object.entries({
-                "Original filename": state.upload.originalFileName,
-                "Import type": state.upload.importTypeName,
-                "Fiscal year": state.upload.fiscalYear,
-                Period: state.upload.period,
-                "File type": state.upload.fileType,
-                "File size": state.upload.fileSize,
-                "File hash": state.upload.fileHash,
-                "Upload timestamp": state.upload.uploadedAt,
-                "Import batch status": state.upload.importBatchStatus
-              }).map(([label, value]) => (
-                <div className="space-y-1" key={label}>
-                  <dt className="font-medium text-foreground">{label}</dt>
-                  <dd className="break-words text-muted-foreground">{value}</dd>
-                </div>
-              ))}
-            </dl>
+            <>
+              <dl className="space-y-3 text-sm">
+                {Object.entries({
+                  "Original filename": state.upload.originalFileName,
+                  "Import type": state.upload.importTypeName,
+                  "Fiscal year": state.upload.fiscalYear,
+                  Period: state.upload.period,
+                  "File type": state.upload.fileType,
+                  "File size": state.upload.fileSize,
+                  "File hash": state.upload.fileHash,
+                  "Upload timestamp": state.upload.uploadedAt,
+                  "Import batch status": state.upload.importBatchStatus
+                }).map(([label, value]) => (
+                  <div className="space-y-1" key={label}>
+                    <dt className="font-medium text-foreground">{label}</dt>
+                    <dd className="break-words text-muted-foreground">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <Link
+                className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring"
+                href={`/imports/new?sourceFileId=${state.upload.sourceFileId}&importBatchId=${state.upload.importBatchId}&importTypeCode=${state.upload.importTypeCode}`}
+              >
+                Continue mapping this file
+              </Link>
+            </>
           ) : null}
         </CardContent>
       </Card>

@@ -34,6 +34,8 @@ type AccountStructureOption = {
   version_number: number;
 };
 
+const MANUAL_MAPPING_ROW_COUNT = 4;
+
 export function TemplateBuilderForm({
   accountStructures,
   action,
@@ -278,6 +280,11 @@ export function TemplateBuilderForm({
                     type="hidden"
                     value={sheet.columns.length}
                   />
+                  <input
+                    name={`sheet_${sheetIndex}_manualCount`}
+                    type="hidden"
+                    value={MANUAL_MAPPING_ROW_COUNT}
+                  />
 
                   <label className="flex items-center gap-2 text-sm">
                     <input name={`sheet_${sheetIndex}_ignore`} type="checkbox" />
@@ -323,7 +330,8 @@ export function TemplateBuilderForm({
                     <table className="w-full min-w-[900px] border-collapse text-left text-sm">
                       <thead>
                         <tr className="border-b border-border text-muted-foreground">
-                          <th className="py-3 pr-4 font-medium">Source column</th>
+                          <th className="py-3 pr-4 font-medium">Detected header</th>
+                          <th className="py-3 pr-4 font-medium">Letter</th>
                           <th className="py-3 pr-4 font-medium">Index</th>
                           <th className="py-3 pr-4 font-medium">Sample values</th>
                           <th className="py-3 pr-4 font-medium">Target field</th>
@@ -336,6 +344,7 @@ export function TemplateBuilderForm({
                             (field) =>
                               normalizeName(field.name) === normalizeName(column.name)
                           );
+                          const columnLetter = columnIndexToLetter(column.index);
 
                           return (
                             <tr
@@ -349,6 +358,9 @@ export function TemplateBuilderForm({
                                   value={column.name}
                                 />
                                 {column.name}
+                              </td>
+                              <td className="py-3 pr-4 text-muted-foreground">
+                                {columnLetter}
                               </td>
                               <td className="py-3 pr-4 text-muted-foreground">
                                 <input
@@ -394,6 +406,84 @@ export function TemplateBuilderForm({
                         })}
                       </tbody>
                     </table>
+                  </div>
+
+                  <div className="space-y-3 rounded-md border border-border bg-muted p-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-foreground">
+                        Manual column overrides
+                      </h3>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                        If a source column is not detected cleanly, enter a
+                        header name, column letter, or column number and map it
+                        to a target field. Leave unused rows blank.
+                      </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-border text-muted-foreground">
+                            <th className="py-3 pr-4 font-medium">Header name</th>
+                            <th className="py-3 pr-4 font-medium">Column letter</th>
+                            <th className="py-3 pr-4 font-medium">Column number</th>
+                            <th className="py-3 pr-4 font-medium">Target field</th>
+                            <th className="py-3 font-medium">Default value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Array.from(
+                            { length: MANUAL_MAPPING_ROW_COUNT },
+                            (_, manualIndex) => (
+                              <tr
+                                className="border-b border-border align-top last:border-0"
+                                key={`${sheet.sheetIndex}-manual-${manualIndex}`}
+                              >
+                                <td className="py-3 pr-4">
+                                  <Input
+                                    name={`sheet_${sheetIndex}_manual_${manualIndex}_name`}
+                                    placeholder="Header name"
+                                  />
+                                </td>
+                                <td className="py-3 pr-4">
+                                  <Input
+                                    name={`sheet_${sheetIndex}_manual_${manualIndex}_letter`}
+                                    placeholder="A"
+                                  />
+                                </td>
+                                <td className="py-3 pr-4">
+                                  <Input
+                                    min={1}
+                                    name={`sheet_${sheetIndex}_manual_${manualIndex}_number`}
+                                    placeholder="1"
+                                    type="number"
+                                  />
+                                </td>
+                                <td className="py-3 pr-4">
+                                  <select
+                                    className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                                    name={`sheet_${sheetIndex}_manual_${manualIndex}_target`}
+                                  >
+                                    <option value="">Ignore manual entry</option>
+                                    {targetFields.map((field) => (
+                                      <option key={field.name} value={field.name}>
+                                        {field.label}
+                                        {field.required ? " (required)" : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="py-3">
+                                  <Input
+                                    name={`sheet_${sheetIndex}_manual_${manualIndex}_default`}
+                                    placeholder="Optional"
+                                  />
+                                </td>
+                              </tr>
+                            )
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -452,4 +542,17 @@ export function TemplateBuilderForm({
 
 function normalizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function columnIndexToLetter(index: number) {
+  let value = index + 1;
+  let letter = "";
+
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    letter = String.fromCharCode(65 + remainder) + letter;
+    value = Math.floor((value - 1) / 26);
+  }
+
+  return letter;
 }

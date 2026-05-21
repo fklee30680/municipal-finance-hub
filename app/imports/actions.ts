@@ -393,7 +393,10 @@ async function uploadSourceFileInternal(
         fileSize: `${fileValue.size} bytes`,
         fileHash,
         uploadedAt: sourceFileResult.data.uploaded_at,
-        importBatchStatus: "uploaded"
+        importBatchStatus: "uploaded",
+        sourceFileId: sourceFileResult.data.source_file_id,
+        importBatchId,
+        importTypeCode: importTypeResult.data.import_type_code
       }
     };
   } catch (error) {

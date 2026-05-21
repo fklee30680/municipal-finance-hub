@@ -342,6 +342,7 @@ const requiredDocs = [
   "docs/mapping-imports.md",
   "docs/trial-balance-validation.md",
   "docs/posting-and-data-review.md",
+  "docs/import-workspace.md",
   "TASKS.md"
 ];
 
@@ -403,7 +404,7 @@ if (existsSync(importsPagePath)) {
   const importsPage = readFileSync(importsPagePath, "utf8");
   const importsPageSnippets = [
     "Reference Imports",
-    "General Upload",
+    "Import Workspace",
     "Upload history",
     "No files have been uploaded yet.",
     "Duplicate warning"
@@ -419,8 +420,11 @@ if (existsSync(importsPagePath)) {
 if (existsSync(newImportPagePath)) {
   const newImportPage = readFileSync(newImportPagePath, "utf8");
   const newImportPageSnippets = [
-    "Upload Source File",
-    "Parsing, template mapping, validation, and posting happen in later"
+    "Import Workspace",
+    "NextActionPanel",
+    "Upload or Select Source File",
+    "File Layout and Column Mapping",
+    "Commit or Post"
   ];
 
   for (const snippet of newImportPageSnippets) {
@@ -477,6 +481,8 @@ const templateRouteFiles = [
   "app/imports/templates/[templateId]/edit/page.tsx",
   "app/imports/templates/actions.ts",
   "components/template-builder-form.tsx",
+  "components/import-workspace-panels.tsx",
+  "lib/imports/workflow-state.ts",
   "lib/templates/target-fields.ts",
   "lib/templates/file-inspection.ts",
   "lib/templates/transformations.ts"
@@ -521,12 +527,50 @@ if (existsSync(templateActionPath)) {
     "transformation_rules",
     "template_version_selected",
     "Trial balance templates require an account structure",
-    "Mapping templates must keep exactly one active selected sheet"
+    "Mapping templates must keep exactly one active selected sheet",
+    "getManualColumnIndex"
   ];
 
   for (const snippet of actionSnippets) {
     if (!templateAction.includes(snippet)) {
       fail(`Missing template action content: ${snippet}`);
+    }
+  }
+}
+
+const templateBuilderFormPath = join(root, "components", "template-builder-form.tsx");
+if (existsSync(templateBuilderFormPath)) {
+  const templateBuilderForm = readFileSync(templateBuilderFormPath, "utf8");
+  const templateBuilderSnippets = [
+    "Manual column overrides",
+    "Column letter",
+    "Column number",
+    "columnIndexToLetter",
+    "MANUAL_MAPPING_ROW_COUNT"
+  ];
+
+  for (const snippet of templateBuilderSnippets) {
+    if (!templateBuilderForm.includes(snippet)) {
+      fail(`Missing template builder UX content: ${snippet}`);
+    }
+  }
+}
+
+const workflowStatePath = join(root, "lib", "imports", "workflow-state.ts");
+if (existsSync(workflowStatePath)) {
+  const workflowState = readFileSync(workflowStatePath, "utf8");
+  const workflowSnippets = [
+    "getNextImportWorkflowAction",
+    "Upload or select a source file",
+    "Map columns and save template",
+    "Run trial balance validation",
+    "Commit accepted mappings",
+    "Post validated trial balance"
+  ];
+
+  for (const snippet of workflowSnippets) {
+    if (!workflowState.includes(snippet)) {
+      fail(`Missing workflow-state content: ${snippet}`);
     }
   }
 }

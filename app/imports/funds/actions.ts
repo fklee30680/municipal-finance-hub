@@ -19,6 +19,11 @@ import {
 } from "@/lib/imports/fund-import-state";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export type FundManualUpdateState = {
+  message: string | null;
+  status: "idle" | "success" | "error";
+};
+
 export async function previewFundImportAction(
   _previousState: FundImportPreviewState,
   formData: FormData
@@ -125,6 +130,137 @@ export async function commitFundImportAction(
   }
 }
 
+export async function updateFundManualAction(
+  _previousState: FundManualUpdateState,
+  formData: FormData
+): Promise<FundManualUpdateState> {
+  try {
+    const authUser = await requireUser();
+    const adminClient = createAdminClient();
+    const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
+    const fundId = getStringValue(formData.get("fundId"));
+
+    if (!fundId) {
+      return manualUpdateError("Fund ID was not provided.");
+    }
+
+    const beforeResult = await adminClient
+      .from("funds")
+      .select(
+        "fund_id, fund_code, fund_name, reporting_model, fund_group, major_fund_flag, active_status, effective_start_date, effective_end_date"
+      )
+      .eq("organization_id", appUser.organization_id)
+      .eq("fund_id", fundId)
+      .maybeSingle<{
+        active_status: string;
+        effective_end_date: string | null;
+        effective_start_date: string | null;
+        fund_code: string;
+        fund_group: string | null;
+        fund_id: string;
+        fund_name: string;
+        major_fund_flag: string | null;
+        reporting_model: string | null;
+      }>();
+
+    if (beforeResult.error) {
+      return manualUpdateError(beforeResult.error.message);
+    }
+
+    if (!beforeResult.data) {
+      return manualUpdateError("Fund could not be found.");
+    }
+
+    const updatePayload = {
+      active_status: getAllowedValue({
+        allowedValues: ["active", "inactive"],
+        fieldLabel: "Active Status",
+        value: getStringValue(formData.get("activeStatus"))
+      }),
+      effective_end_date: getDateOrNull(formData.get("effectiveEndDate"), "Effective End"),
+      effective_start_date: getDateOrNull(
+        formData.get("effectiveStartDate"),
+        "Effective Start"
+      ),
+      fund_group: getNullableString(formData.get("fundGroup")),
+      major_fund_flag: getAllowedNullableValue({
+        allowedValues: ["yes", "no"],
+        fieldLabel: "Major Fund",
+        value: getStringValue(formData.get("majorFundFlag"))
+      }),
+      reporting_model: getAllowedNullableValue({
+        allowedValues: [
+          "governmental",
+          "proprietary",
+          "fiduciary",
+          "component_unit",
+          "other"
+        ],
+        fieldLabel: "Reporting Model",
+        value: getStringValue(formData.get("reportingModel"))
+      }),
+      source_method: "manual",
+      updated_at: new Date().toISOString(),
+      updated_by: appUser.user_id
+    };
+
+    if (
+      updatePayload.effective_start_date &&
+      updatePayload.effective_end_date &&
+      updatePayload.effective_end_date < updatePayload.effective_start_date
+    ) {
+      return manualUpdateError("Effective End cannot be before Effective Start.");
+    }
+
+    const updateResult = await adminClient
+      .from("funds")
+      .update(updatePayload)
+      .eq("organization_id", appUser.organization_id)
+      .eq("fund_id", fundId)
+      .select(
+        "fund_id, fund_code, fund_name, reporting_model, fund_group, major_fund_flag, active_status, effective_start_date, effective_end_date"
+      )
+      .single();
+
+    if (updateResult.error) {
+      return manualUpdateError(updateResult.error.message);
+    }
+
+    await adminClient.from("audit_logs").insert({
+      action_type: "fund_manual_update",
+      actor_user_id: appUser.user_id,
+      after_payload: updateResult.data,
+      before_payload: beforeResult.data,
+      entity_id: fundId,
+      entity_table: "funds",
+      metadata: {
+        route: "/imports/funds",
+        updated_fields: [
+          "reporting_model",
+          "fund_group",
+          "major_fund_flag",
+          "active_status",
+          "effective_start_date",
+          "effective_end_date"
+        ]
+      },
+      organization_id: appUser.organization_id
+    });
+
+    revalidatePath("/imports/funds");
+    revalidatePath("/analysis/calculation-runs");
+
+    return {
+      message: `Fund ${beforeResult.data.fund_code} updated.`,
+      status: "success"
+    };
+  } catch (error) {
+    return manualUpdateError(
+      error instanceof Error ? error.message : "Fund update failed."
+    );
+  }
+}
+
 function getMapping(formData: FormData): FundImportMapping {
   return {
     activeStatusColumn: getStringValue(formData.get("activeStatusColumn")) || "Active Status",
@@ -155,6 +291,56 @@ function getStringValue(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function getNullableString(value: FormDataEntryValue | null) {
+  const stringValue = getStringValue(value);
+  return stringValue || null;
+}
+
+function getDateOrNull(value: FormDataEntryValue | null, fieldLabel: string) {
+  const stringValue = getStringValue(value);
+  if (!stringValue) return null;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(stringValue)) {
+    throw new Error(`${fieldLabel} must be a valid date.`);
+  }
+
+  return stringValue;
+}
+
+function getAllowedValue({
+  allowedValues,
+  fieldLabel,
+  value
+}: {
+  allowedValues: string[];
+  fieldLabel: string;
+  value: string;
+}) {
+  if (!allowedValues.includes(value)) {
+    throw new Error(`${fieldLabel} is not valid.`);
+  }
+
+  return value;
+}
+
+function getAllowedNullableValue({
+  allowedValues,
+  fieldLabel,
+  value
+}: {
+  allowedValues: string[];
+  fieldLabel: string;
+  value: string;
+}) {
+  if (!value) return null;
+
+  if (!allowedValues.includes(value)) {
+    throw new Error(`${fieldLabel} is not valid.`);
+  }
+
+  return value;
+}
+
 function previewError(message: string): FundImportPreviewState {
   return {
     ...initialFundImportPreviewState,
@@ -166,6 +352,13 @@ function previewError(message: string): FundImportPreviewState {
 function commitError(message: string): FundImportCommitState {
   return {
     ...initialFundImportCommitState,
+    message,
+    status: "error"
+  };
+}
+
+function manualUpdateError(message: string): FundManualUpdateState {
+  return {
     message,
     status: "error"
   };

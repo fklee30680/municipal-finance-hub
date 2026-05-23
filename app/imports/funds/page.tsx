@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { AppShell } from "@/components/app-shell";
 import { FundImportForm } from "@/components/fund-import-form";
+import { FundManualUpdateForm } from "@/components/fund-manual-update-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { ensureAppUserForAuthUser } from "@/lib/auth/app-user";
 import { requireUser } from "@/lib/auth/session";
@@ -30,18 +31,25 @@ export default async function FundImportPage({
   const authUser = await requireUser();
   const adminClient = createAdminClient();
   const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
-  const [fundsResult, activeCount] = await Promise.all([
+  const [fundsResult, fundCount] = await Promise.all([
     loadFunds({
       adminClient,
       organizationId: appUser.organization_id,
       search
     }),
-    loadActiveFundCount({
+    loadFundCount({
       adminClient,
       organizationId: appUser.organization_id
     })
   ]);
   const funds = fundsResult.data ?? [];
+  const fundGroups = Array.from(
+    new Set(
+      funds
+        .map((fund) => fund.fund_group?.trim())
+        .filter((group): group is string => Boolean(group))
+    )
+  ).sort((a, b) => a.localeCompare(b));
 
   return (
     <AppShell>
@@ -80,7 +88,7 @@ export default async function FundImportPage({
           <div>
             <h2 className="text-base font-semibold text-foreground">Funds</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {activeCount} funds available.
+              {fundCount} funds available.
             </p>
           </div>
 
@@ -99,7 +107,7 @@ export default async function FundImportPage({
                 className="min-h-10 flex-1 rounded-none border border-input bg-background px-3 text-sm"
                 defaultValue={search}
                 name="search"
-                placeholder="Search fund code, name, type, group, or reporting model"
+                placeholder="Search fund code, name, type, group, status, or reporting model"
               />
               <button className="rounded-md border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-muted">
                 Search
@@ -123,7 +131,7 @@ export default async function FundImportPage({
               ) : null}
               {funds.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
+                  <table className="w-full min-w-[1450px] border-collapse text-left text-sm">
                     <thead>
                       <tr className="border-b border-border text-muted-foreground">
                         <th className="py-3 pr-4 font-medium">Fund Code</th>
@@ -135,12 +143,20 @@ export default async function FundImportPage({
                         <th className="py-3 pr-4 font-medium">Active Status</th>
                         <th className="py-3 pr-4 font-medium">Effective Start</th>
                         <th className="py-3 pr-4 font-medium">Effective End</th>
-                        <th className="py-3 font-medium">Last Updated</th>
+                        <th className="py-3 pr-4 font-medium">Last Updated</th>
+                        <th className="py-3 font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {funds.map((fund) => (
-                        <tr className="border-b border-border align-top" key={fund.fund_id}>
+                        <tr
+                          className={
+                            fund.active_status === "inactive"
+                              ? "border-b border-border align-top opacity-75"
+                              : "border-b border-border align-top"
+                          }
+                          key={fund.fund_id}
+                        >
                           <td className="py-3 pr-4 font-mono text-xs font-medium text-foreground">
                             {fund.fund_code}
                           </td>
@@ -171,6 +187,12 @@ export default async function FundImportPage({
                           <td className="py-3 text-muted-foreground">
                             {fund.updated_at ? formatDate(fund.updated_at) : "Not set"}
                           </td>
+                          <td className="py-3">
+                            <FundManualUpdateForm
+                              fund={fund}
+                              fundGroups={fundGroups}
+                            />
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -200,21 +222,20 @@ async function loadFunds({
       "fund_id, fund_code, fund_name, fund_type, reporting_model, fund_group, major_fund_flag, active_status, effective_start_date, effective_end_date, updated_at"
     )
     .eq("organization_id", organizationId)
-    .eq("active_status", "active")
     .order("fund_code", { ascending: true })
     .limit(250);
 
   if (search.trim()) {
     const pattern = `%${search.trim()}%`;
     query = query.or(
-      `fund_code.ilike.${pattern},fund_name.ilike.${pattern},fund_type.ilike.${pattern},reporting_model.ilike.${pattern},fund_group.ilike.${pattern}`
+      `fund_code.ilike.${pattern},fund_name.ilike.${pattern},fund_type.ilike.${pattern},reporting_model.ilike.${pattern},fund_group.ilike.${pattern},active_status.ilike.${pattern}`
     );
   }
 
   return query.returns<FundRow[]>();
 }
 
-async function loadActiveFundCount({
+async function loadFundCount({
   adminClient,
   organizationId
 }: {
@@ -224,8 +245,7 @@ async function loadActiveFundCount({
   const result = await adminClient
     .from("funds")
     .select("*", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .eq("active_status", "active");
+    .eq("organization_id", organizationId);
 
   return result.count ?? 0;
 }

@@ -96,7 +96,7 @@ export default async function ReferenceImportsPage() {
                   href={
                     card.routeSegment === "funds"
                       ? "/imports/funds"
-                      : `/imports/reference/${card.routeSegment}`
+                      : `/imports/${card.routeSegment}`
                   }
                 >
                   Open {card.name}

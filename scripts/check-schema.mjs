@@ -653,17 +653,27 @@ const mappingImportFiles = [
   "app/imports/[importBatchId]/mapping-preview/page.tsx",
   "app/imports/[importBatchId]/mapping-preview/actions.ts",
   "app/imports/[importBatchId]/mapping-preview/bad-data.csv/route.ts",
+  "app/imports/acfr/page.tsx",
+  "app/imports/departments/page.tsx",
   "app/imports/funds/page.tsx",
   "app/imports/funds/actions.ts",
+  "app/imports/functions/page.tsx",
+  "app/imports/objects/page.tsx",
+  "app/imports/reference-actions.ts",
   "app/imports/reference/page.tsx",
   "app/imports/reference/[referenceType]/page.tsx",
   "components/fund-import-form.tsx",
   "components/mapping-import-actions.tsx",
+  "components/simple-reference-import-form.tsx",
+  "components/simple-reference-import-page.tsx",
   "lib/imports/fund-import.ts",
   "lib/imports/fund-import-state.ts",
   "lib/imports/mapping-import.ts",
   "lib/imports/mapping-import-state.ts",
-  "lib/imports/reference-imports.ts"
+  "lib/imports/reference-imports.ts",
+  "lib/imports/simple-reference-import.ts",
+  "lib/imports/simple-reference-import-config.ts",
+  "lib/imports/simple-reference-import-state.ts"
 ];
 
 for (const file of mappingImportFiles) {
@@ -719,8 +729,18 @@ if (existsSync(mappingImportPagePath)) {
 const referenceImportPagePath = join(root, "app", "imports", "reference", "[referenceType]", "page.tsx");
 if (existsSync(referenceImportPagePath)) {
   const referenceImportPage = readFileSync(referenceImportPagePath, "utf8");
-  if (!referenceImportPage.includes('redirect("/imports/funds")')) {
-    fail("Reference fund route does not redirect to the simplified fund import page.");
+  const redirectSnippets = [
+    "\"acfr\"",
+    "\"departments\"",
+    "\"functions\"",
+    "\"objects\"",
+    "redirect("
+  ];
+
+  for (const snippet of redirectSnippets) {
+    if (!referenceImportPage.includes(snippet)) {
+      fail(`Reference legacy route redirect is missing: ${snippet}`);
+    }
   }
 }
 
@@ -758,6 +778,83 @@ if (existsSync(fundImportFormPath)) {
   for (const snippet of fundImportFormSnippets) {
     if (!fundImportForm.includes(snippet)) {
       fail(`Missing fund import form content: ${snippet}`);
+    }
+  }
+}
+
+const simpleReferenceConfigPath = join(root, "lib", "imports", "simple-reference-import-config.ts");
+if (existsSync(simpleReferenceConfigPath)) {
+  const simpleReferenceConfig = readFileSync(simpleReferenceConfigPath, "utf8");
+  const configSnippets = [
+    "Object Code Column",
+    "ACFR Code Column",
+    "Department Code Column",
+    "Function Code Column",
+    "account_type_detailed",
+    "function_description",
+    "department_group",
+    "acfr_description"
+  ];
+
+  for (const snippet of configSnippets) {
+    if (!simpleReferenceConfig.includes(snippet)) {
+      fail(`Missing simple reference import config content: ${snippet}`);
+    }
+  }
+}
+
+const simpleReferenceEnginePath = join(root, "lib", "imports", "simple-reference-import.ts");
+if (existsSync(simpleReferenceEnginePath)) {
+  const simpleReferenceEngine = readFileSync(simpleReferenceEnginePath, "utf8");
+  const engineSnippets = [
+    "resolveColumnReference",
+    "columnLetterToIndex",
+    "buildSimpleReferencePreview",
+    "commitSimpleReferenceRows",
+    "mapping_versions",
+    "duplicate_code",
+    "existing_record_skipped"
+  ];
+
+  for (const snippet of engineSnippets) {
+    if (!simpleReferenceEngine.includes(snippet)) {
+      fail(`Missing simple reference import engine content: ${snippet}`);
+    }
+  }
+}
+
+const simpleReferenceFormPath = join(root, "components", "simple-reference-import-form.tsx");
+if (existsSync(simpleReferenceFormPath)) {
+  const simpleReferenceForm = readFileSync(simpleReferenceFormPath, "utf8");
+  const formSnippets = [
+    "Import Mapping",
+    "Update existing",
+    "Fill missing data on existing",
+    "Delete / exclude",
+    "Bad-data report",
+    "Commit"
+  ];
+
+  for (const snippet of formSnippets) {
+    if (!simpleReferenceForm.includes(snippet)) {
+      fail(`Missing simple reference import form content: ${snippet}`);
+    }
+  }
+}
+
+const simpleReferenceRouteChecks = [
+  ["objects", "simpleReferenceImportConfigs.objects"],
+  ["acfr", "simpleReferenceImportConfigs.acfr"],
+  ["departments", "simpleReferenceImportConfigs.departments"],
+  ["functions", "simpleReferenceImportConfigs.functions"]
+];
+
+for (const [routeSegment, configSnippet] of simpleReferenceRouteChecks) {
+  const routePath = join(root, "app", "imports", routeSegment, "page.tsx");
+  if (existsSync(routePath)) {
+    const routePage = readFileSync(routePath, "utf8");
+    if (!routePage.includes(configSnippet)) {
+      fail(`Missing direct reference import route config: ${routeSegment}`);
     }
   }
 }

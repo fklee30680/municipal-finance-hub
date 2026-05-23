@@ -109,8 +109,16 @@ export default async function ReferenceImportTypePage({
     notFound();
   }
 
-  if (config.routeSegment === "funds") {
-    redirect("/imports/funds");
+  if (
+    ["acfr", "departments", "functions", "funds", "objects"].includes(
+      config.routeSegment
+    )
+  ) {
+    redirect(
+      config.routeSegment === "funds"
+        ? "/imports/funds"
+        : `/imports/${config.routeSegment}`
+    );
   }
 
   const authUser = await requireUser();

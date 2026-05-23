@@ -75,6 +75,8 @@ Slice 8 adds governed posting and data review for validated trial balance import
 
 The Import Workspace improves the user path across the completed import slices. Users can upload or resume a source file, inspect headers/sheets, map columns with detected or manual column references, save templates, preview, validate/review, and commit/post from one guided workspace while the governed backend records remain intact.
 
+Fund imports also have a focused `/imports/funds` page patterned after the invoice-management PO List Update flow. It uses temporary preview rows, lets users edit or exclude staged fund rows before commit, creates a fund mapping version for committed inserts/updates, and shows a read-only Funds table.
+
 Current slices still intentionally do not implement finance calculations, dashboards, report generation, budget functionality, or AI commentary.
 
 ## Documentation

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { uploadSourceFile } from "@/app/imports/actions";
 import { createImportTemplate } from "@/app/imports/templates/actions";
@@ -107,6 +107,10 @@ export default async function ReferenceImportTypePage({
 
   if (!config) {
     notFound();
+  }
+
+  if (config.routeSegment === "funds") {
+    redirect("/imports/funds");
   }
 
   const authUser = await requireUser();

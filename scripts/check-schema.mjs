@@ -653,9 +653,14 @@ const mappingImportFiles = [
   "app/imports/[importBatchId]/mapping-preview/page.tsx",
   "app/imports/[importBatchId]/mapping-preview/actions.ts",
   "app/imports/[importBatchId]/mapping-preview/bad-data.csv/route.ts",
+  "app/imports/funds/page.tsx",
+  "app/imports/funds/actions.ts",
   "app/imports/reference/page.tsx",
   "app/imports/reference/[referenceType]/page.tsx",
+  "components/fund-import-form.tsx",
   "components/mapping-import-actions.tsx",
+  "lib/imports/fund-import.ts",
+  "lib/imports/fund-import-state.ts",
   "lib/imports/mapping-import.ts",
   "lib/imports/mapping-import-state.ts",
   "lib/imports/reference-imports.ts"
@@ -714,18 +719,45 @@ if (existsSync(mappingImportPagePath)) {
 const referenceImportPagePath = join(root, "app", "imports", "reference", "[referenceType]", "page.tsx");
 if (existsSync(referenceImportPagePath)) {
   const referenceImportPage = readFileSync(referenceImportPagePath, "utf8");
+  if (!referenceImportPage.includes('redirect("/imports/funds")')) {
+    fail("Reference fund route does not redirect to the simplified fund import page.");
+  }
+}
+
+const fundImportPagePath = join(root, "app", "imports", "funds", "page.tsx");
+if (existsSync(fundImportPagePath)) {
+  const fundImportPage = readFileSync(fundImportPagePath, "utf8");
   const fundImportUxSnippets = [
     "Fund List Update",
-    "Import Fund List",
     "Search Funds",
-    "MappingPreviewAction",
-    "MappingCommitAction",
-    "renderGenericReferencePage"
+    "FundImportForm",
+    "No funds have been committed yet"
   ];
 
   for (const snippet of fundImportUxSnippets) {
-    if (!referenceImportPage.includes(snippet)) {
+    if (!fundImportPage.includes(snippet)) {
       fail(`Missing fund import UX content: ${snippet}`);
+    }
+  }
+}
+
+const fundImportFormPath = join(root, "components", "fund-import-form.tsx");
+if (existsSync(fundImportFormPath)) {
+  const fundImportForm = readFileSync(fundImportFormPath, "utf8");
+  const fundImportFormSnippets = [
+    "Import Funds",
+    "Fund Code Column",
+    "Update existing funds",
+    "Fill missing data on existing funds",
+    "Fund Import Preview",
+    "Delete / exclude",
+    "Commit Funds",
+    "Bad-data report"
+  ];
+
+  for (const snippet of fundImportFormSnippets) {
+    if (!fundImportForm.includes(snippet)) {
+      fail(`Missing fund import form content: ${snippet}`);
     }
   }
 }

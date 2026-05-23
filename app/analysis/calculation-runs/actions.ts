@@ -55,9 +55,7 @@ export async function runCalculationAction(
       status: "success"
     };
   } catch (error) {
-    return errorState(
-      error instanceof Error ? error.message : "Calculation run failed."
-    );
+    return errorState(formatCalculationError(error));
   }
 }
 
@@ -75,4 +73,24 @@ function getInteger(value: FormDataEntryValue | null) {
 
 function getString(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function formatCalculationError(error: unknown) {
+  const message = error instanceof Error ? error.message : "Calculation run failed.";
+
+  if (isMissingCalculationSchemaError(message)) {
+    return "Calculation schema is not installed in Supabase yet. Apply the Slice 9 analysis outputs migration, then rerun the calculation.";
+  }
+
+  return message;
+}
+
+function isMissingCalculationSchemaError(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("calculation_runs.period_from") ||
+    normalized.includes("column calculation_runs.period_from does not exist") ||
+    normalized.includes("mapping_coverage_results") ||
+    normalized.includes("sign_convention_configs")
+  );
 }

@@ -11,10 +11,12 @@ import { Input } from "@/components/ui/input";
 
 export function CalculationRunForm({
   defaultFiscalYear,
-  defaultPeriod
+  defaultPeriod,
+  disabledReason
 }: {
   defaultFiscalYear: number;
   defaultPeriod: number;
+  disabledReason?: string;
 }) {
   const [state, formAction, pending] = useActionState(
     runCalculationAction,
@@ -70,7 +72,7 @@ export function CalculationRunForm({
         </label>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <Button disabled={pending} type="submit">
+        <Button disabled={pending || Boolean(disabledReason)} type="submit">
           {pending ? "Running..." : "Run Calculation"}
         </Button>
         <p className="text-sm text-muted-foreground">
@@ -78,6 +80,11 @@ export function CalculationRunForm({
           dashboards or generate reports.
         </p>
       </div>
+      {disabledReason ? (
+        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {disabledReason}
+        </p>
+      ) : null}
       {state.message ? (
         <p
           className={

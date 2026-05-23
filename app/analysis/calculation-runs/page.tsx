@@ -138,6 +138,9 @@ export default async function CalculationRunsPage({
   const defaultFiscalYear =
     defaultPeriodResult.data?.fiscal_year ?? new Date().getFullYear();
   const defaultPeriod = defaultPeriodResult.data?.period ?? 1;
+  const schemaMigrationMissing = isMissingCalculationSchemaError(
+    runsResult.error?.message
+  );
 
   return (
     <AppShell>
@@ -186,9 +189,23 @@ export default async function CalculationRunsPage({
             <CardTitle>Run calculation</CardTitle>
           </CardHeader>
           <CardContent>
+            {schemaMigrationMissing ? (
+              <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                The calculation page code is deployed, but the Slice 9 Supabase
+                migration is not applied yet. Supabase is missing calculation
+                columns such as <code>calculation_runs.period_from</code>.
+                Apply the Slice 9 analysis outputs migration, then rerun the
+                calculation.
+              </div>
+            ) : null}
             <CalculationRunForm
               defaultFiscalYear={defaultFiscalYear}
               defaultPeriod={defaultPeriod}
+              disabledReason={
+                schemaMigrationMissing
+                  ? "Apply the Slice 9 analysis outputs migration in Supabase before running calculations."
+                  : undefined
+              }
             />
           </CardContent>
         </Card>
@@ -464,6 +481,16 @@ export default async function CalculationRunsPage({
         ) : null}
       </section>
     </AppShell>
+  );
+}
+
+function isMissingCalculationSchemaError(message: string | undefined) {
+  const normalized = message?.toLowerCase() ?? "";
+  return (
+    normalized.includes("calculation_runs.period_from") ||
+    normalized.includes("column calculation_runs.period_from does not exist") ||
+    normalized.includes("mapping_coverage_results") ||
+    normalized.includes("sign_convention_configs")
   );
 }
 

@@ -50,6 +50,12 @@ const postingMigrationPath = join(
   "migrations",
   "20260519234331_post_validated_trial_balance.sql"
 );
+const analysisMigrationPath = join(
+  root,
+  "supabase",
+  "migrations",
+  "20260523000100_analysis_outputs_mapping_coverage.sql"
+);
 
 const requiredTables = [
   "organizations",
@@ -330,6 +336,31 @@ if (!existsSync(postingMigrationPath)) {
   }
 }
 
+if (!existsSync(analysisMigrationPath)) {
+  fail(`Missing analysis migration: ${analysisMigrationPath}`);
+} else {
+  const analysisSql = readFileSync(analysisMigrationPath, "utf8");
+  const analysisSnippets = [
+    "create table if not exists public.sign_convention_configs",
+    "create table if not exists public.mapping_coverage_results",
+    "add column if not exists dependency_manifest",
+    "add column if not exists calculation_version",
+    "add column if not exists mapping_coverage_status",
+    "add column if not exists trial_balance_import_batch_ids",
+    "add column if not exists severity_level",
+    "mvp_actuals_v1",
+    "MVP Calculation Thresholds",
+    "MVP Actuals Sign Convention",
+    "idx_mapping_coverage_results_run"
+  ];
+
+  for (const snippet of analysisSnippets) {
+    if (!analysisSql.includes(snippet)) {
+      fail(`Missing required analysis migration content: ${snippet}`);
+    }
+  }
+}
+
 const requiredDocs = [
   "docs/product-spec.md",
   "docs/build-plan.md",
@@ -343,6 +374,7 @@ const requiredDocs = [
   "docs/trial-balance-validation.md",
   "docs/posting-and-data-review.md",
   "docs/import-workspace.md",
+  "docs/analysis-outputs.md",
   "TASKS.md"
 ];
 
@@ -1017,6 +1049,67 @@ if (existsSync(postingPagePath)) {
   for (const snippet of postingPageSnippets) {
     if (!postingPage.includes(snippet)) {
       fail(`Missing posting page content: ${snippet}`);
+    }
+  }
+}
+
+const analysisFiles = [
+  "app/analysis/page.tsx",
+  "app/analysis/calculation-runs/page.tsx",
+  "app/analysis/calculation-runs/actions.ts",
+  "components/calculation-run-form.tsx",
+  "lib/calculations/run-calculation.ts",
+  "lib/calculations/sign-conventions.ts",
+  "lib/calculations/thresholds.ts"
+];
+
+for (const file of analysisFiles) {
+  if (!existsSync(join(root, file))) {
+    fail(`Missing analysis output file: ${file}`);
+  }
+}
+
+const calculationEnginePath = join(root, "lib", "calculations", "run-calculation.ts");
+if (existsSync(calculationEnginePath)) {
+  const calculationEngine = readFileSync(calculationEnginePath, "utf8");
+  const calculationSnippets = [
+    "runAnalysisCalculation",
+    "active_trial_balance_lines",
+    "mapping_coverage_results",
+    "financial_summary_results",
+    "statement_summary_results",
+    "variance_results",
+    "trend_results",
+    "exception_results",
+    "CALCULATION_VERSION",
+    "Multiple active posted imports",
+    "missing_prior_year_comparison_data",
+    "missing_mapping_classification",
+    "calculation_run_completed"
+  ];
+
+  for (const snippet of calculationSnippets) {
+    if (!calculationEngine.includes(snippet)) {
+      fail(`Missing calculation engine content: ${snippet}`);
+    }
+  }
+}
+
+const calculationRunsPagePath = join(root, "app", "analysis", "calculation-runs", "page.tsx");
+if (existsSync(calculationRunsPagePath)) {
+  const calculationRunsPage = readFileSync(calculationRunsPagePath, "utf8");
+  const pageSnippets = [
+    "Calculation Runs",
+    "CalculationRunForm",
+    "Mapping coverage review",
+    "Financial summary output",
+    "Exception output",
+    "not a CFO dashboard"
+  ];
+
+  for (const snippet of pageSnippets) {
+    if (!calculationRunsPage.includes(snippet)) {
+      fail(`Missing calculation runs page content: ${snippet}`);
     }
   }
 }

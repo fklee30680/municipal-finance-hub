@@ -148,3 +148,20 @@ Slice 8 posts eligible validated trial balance imports into governed reporting t
 Posting is blocked when validation has critical errors, required warnings are unacknowledged, fiscal period context is missing, or active posted data already exists for the same fiscal year and period. Period replacement requires a request and approval. Replacement supersedes/inactivates old rows rather than physically deleting them. Reactivation also requires request, approval, audit trail, and active-period conflict checks.
 
 Slice 8 does not parse files, build templates, rerun validation rules beyond consuming Slice 7 eligibility, run calculations, build dashboards, generate reports, import budgets, add AI commentary, or allow in-app source row editing.
+
+## Slice 9: Analysis Outputs, Calculation Engine MVP, and Mapping Coverage
+
+Slice 9 creates governed analysis outputs from posted, active trial balance rows
+only. It generates calculation runs, current-period/YTD/range summaries,
+statement summaries, variances, trends, exceptions, and mapping coverage results
+for reference completeness.
+
+Trial balance data remains the strict source of record for financial analysis.
+Reference tables are current/static presentation and classification master data.
+Fund, Object, ACFR, Department, and Function reference imports do not require
+trial-balance-style raw file retention for Slice 9. Missing or incomplete
+reference data is surfaced through mapping coverage results.
+
+Slice 9 does not build dashboard views, draft Monthly Finance Reports, export
+reports, import budgets, calculate budget-to-actual variance, add AI commentary,
+or use raw uploads/previews/unposted imports as reporting input.

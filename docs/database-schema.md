@@ -185,6 +185,23 @@ Posted rows remain traceable to source file, import batch, template version, acc
 
 Normal posting is blocked if active posted data already exists for the same organization, fiscal year, and period. Replacement uses request/approval and supersession/inactivation rather than physical deletion. Reactivation also requires request/approval and a conflict check.
 
+## Analysis Outputs and Mapping Coverage
+
+Slice 9 extends the calculation result shells with dependency manifests,
+calculation versioning, stale/current fields, threshold and sign-convention
+configuration, and mapping coverage output.
+
+The calculation engine reads from `active_trial_balance_lines` only. It writes
+summary, statement, variance, trend, exception, and mapping coverage rows linked
+to a `calculation_runs` record. Mapping coverage rows identify posted trial
+balance codes that are missing or incomplete in current Funds, Objects, ACFR,
+Departments, or Functions reference tables.
+
+Reference import source files and import batches are not required for Slice 9
+calculation reproducibility. Trial balance lineage remains strict through import
+batches, posting runs, validation runs, account structure, thresholds, sign
+conventions, and parameters.
+
 ## Deferred
 
 Slice 1 does not implement:

@@ -114,3 +114,12 @@
 - Use reactivation requests and approval with conflict checks before making inactive/superseded imports active again.
 - Exclude inactive and superseded imports from default active views while keeping them visible through review filters.
 - Continue excluding calculations, dashboards, reports, budget import, and AI commentary.
+
+## Slice 9 Analysis Output Decisions
+
+- Use posted active trial balance rows as calculation inputs through `active_trial_balance_lines`.
+- Store calculation run dependency manifests focused on trial balance import batches, posting runs, validation runs, account structure, thresholds, sign conventions, parameters, and calculation version.
+- Treat reference tables as current presentation/classification master data. Simplified reference import raw files and import batches are not required for Slice 9 reproducibility.
+- Generate mapping coverage results for missing or incomplete Funds, Objects, ACFR, Departments, and Functions data used by posted trial balance rows.
+- Keep governmental and proprietary logic separated through `funds.reporting_model` with `fund_type` as supporting classification.
+- Keep Slice 9 as output plumbing only: no dashboards, report drafting, report exports, budget variance, or AI commentary.

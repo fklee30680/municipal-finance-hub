@@ -73,11 +73,13 @@ Slice 7 adds trial balance validation and exception review. Validation determine
 
 Slice 8 adds governed posting and data review for validated trial balance imports. Posted rows become active for future reporting only after successful posting; replacement and reactivation require request/approval workflows and conflict checks.
 
+Slice 9 adds governed analysis outputs for posted active trial balance rows. Calculation runs generate financial summaries, statement summaries, variances, trends, exceptions, and mapping coverage results while preserving trial balance lineage to import batches, posting runs, validation runs, account structure, thresholds, sign convention settings, and parameters. Reference imports remain lightweight setup data; mapping coverage reports missing or incomplete reference classifications.
+
 The Import Workspace improves the user path across the completed import slices. Users can upload or resume a source file, inspect headers/sheets, map columns with detected or manual column references, save templates, preview, validate/review, and commit/post from one guided workspace while the governed backend records remain intact.
 
 Reference imports also have focused `/imports/funds`, `/imports/objects`, `/imports/acfr`, `/imports/departments`, and `/imports/functions` pages patterned after the invoice-management PO List Update flow. These pages use temporary preview rows, let users edit or exclude staged rows before commit, create mapping versions for committed inserts/updates, and show read-only reference tables.
 
-Current slices still intentionally do not implement finance calculations, dashboards, report generation, budget functionality, or AI commentary.
+Current slices still intentionally do not implement dashboards, report generation, budget functionality, or AI commentary.
 
 ## Documentation
 
@@ -94,6 +96,7 @@ Current slices still intentionally do not implement finance calculations, dashbo
 - `docs/trial-balance-validation.md`
 - `docs/posting-and-data-review.md`
 - `docs/import-workspace.md`
+- `docs/analysis-outputs.md`
 - `TASKS.md`
 
 ## Deployment Target

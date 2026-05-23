@@ -1,0 +1,1649 @@
+import "server-only";
+
+import { randomUUID } from "node:crypto";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import {
+  CALCULATION_VERSION,
+  normalizeClassification,
+  presentationAmount
+} from "@/lib/calculations/sign-conventions";
+import {
+  classifyVarianceSeverity,
+  loadThresholdConfig,
+  type ThresholdConfig
+} from "@/lib/calculations/thresholds";
+
+type TimeView = "current_period" | "ytd" | "selected_range";
+
+export type RunCalculationRequest = {
+  fiscalYear: number;
+  organizationId: string;
+  periodFrom: number;
+  periodTo: number;
+  timeView: TimeView;
+  userId: string;
+};
+
+type ActiveTrialBalanceLine = {
+  trial_balance_line_id: string;
+  organization_id: string;
+  fiscal_year: number;
+  period: number;
+  full_account_number: string;
+  fund_code: string | null;
+  acfr_code: string | null;
+  department_code: string | null;
+  function_code: string | null;
+  object_code: string | null;
+  account_name: string | null;
+  beginning_balance: number | string;
+  debits: number | string;
+  credits: number | string;
+  net_change: number | string;
+  ending_balance: number | string;
+  import_batch_id: string;
+  template_version_id: string | null;
+  account_structure_id: string | null;
+  validation_run_id: string | null;
+  posting_run_id: string | null;
+};
+
+type ReferenceRow = Record<string, string | number | null>;
+
+type EnrichedLine = ActiveTrialBalanceLine & {
+  account_type: string | null;
+  balance_sheet_category: string | null;
+  cash_flow_category: string | null;
+  detailed_account_type: string | null;
+  account_type_detailed: string | null;
+  fund_type: string | null;
+  reporting_model: string | null;
+  statement_category: string | null;
+};
+
+type CoverageIssue = {
+  affectedAmount: number;
+  affectedRowCount: number;
+  coverageIssueType: string;
+  message: string;
+  recommendedAction: string;
+  referenceStatus: string;
+  referenceTable: string;
+  segmentCode: string;
+  segmentName: string | null;
+  segmentType: "fund" | "object" | "acfr" | "department" | "function";
+  severity: "Info" | "Warning" | "High" | "Critical";
+};
+
+type ResultRows = {
+  exceptions: Record<string, unknown>[];
+  financialSummaries: Record<string, unknown>[];
+  mappingCoverage: Record<string, unknown>[];
+  statementSummaries: Record<string, unknown>[];
+  trends: Record<string, unknown>[];
+  variances: Record<string, unknown>[];
+};
+
+export async function runAnalysisCalculation({
+  adminClient,
+  request
+}: {
+  adminClient: SupabaseClient;
+  request: RunCalculationRequest;
+}) {
+  validateCalculationRequest(request);
+
+  const calculationRunId = randomUUID();
+  const now = new Date().toISOString();
+  const thresholdConfig = await loadThresholdConfig({
+    adminClient,
+    organizationId: request.organizationId
+  });
+  const signConventionConfigId = await loadSignConventionConfigId({
+    adminClient,
+    organizationId: request.organizationId
+  });
+
+  await markComparableRunsSuperseded({
+    adminClient,
+    calculationRunId,
+    request
+  });
+
+  const runningRun = await adminClient.from("calculation_runs").insert({
+    account_structure_id: null,
+    calculation_run_id: calculationRunId,
+    calculation_type: "actuals_analysis",
+    calculation_version: CALCULATION_VERSION,
+    fiscal_year: request.fiscalYear,
+    is_current: true,
+    is_stale: false,
+    organization_id: request.organizationId,
+    parameters: buildParametersSnapshot(request),
+    parameters_snapshot: buildParametersSnapshot(request),
+    period: request.periodTo,
+    period_from: request.periodFrom,
+    period_to: request.periodTo,
+    run_status: "running",
+    run_type: "actuals_analysis",
+    sign_convention_config_id: signConventionConfigId,
+    started_at: now,
+    threshold_config_id: thresholdConfig.thresholdConfigId,
+    time_view: request.timeView,
+    triggered_at: now,
+    triggered_by: request.userId,
+    created_by: request.userId
+  });
+
+  if (runningRun.error) {
+    throw new Error(runningRun.error.message);
+  }
+
+  try {
+    await validateFiscalPeriods({ adminClient, request });
+    const currentLines = await loadActivePostedLines({ adminClient, request });
+    assertSingleActiveImportPerPeriod(currentLines);
+
+    const comparison = await loadComparisonLines({
+      adminClient,
+      currentLines,
+      request
+    });
+    const references = await loadReferenceRows({
+      adminClient,
+      organizationId: request.organizationId
+    });
+    const enrichedLines = enrichLines(currentLines, references);
+    const dependencyManifest = buildDependencyManifest({
+      comparison,
+      currentLines,
+      request,
+      signConventionConfigId,
+      thresholdConfig
+    });
+    const coverageIssues = buildMappingCoverageIssues({
+      lines: currentLines,
+      references
+    });
+    const results = buildResults({
+      calculationRunId,
+      comparison,
+      coverageIssues,
+      enrichedLines,
+      request,
+      thresholdConfig
+    });
+    const mappingCoverageStatus = getMappingCoverageStatus(coverageIssues);
+    const runStatus =
+      mappingCoverageStatus === "Incomplete" || results.exceptions.length > 0
+        ? "completed_with_warnings"
+        : "completed";
+
+    await persistResults({
+      adminClient,
+      results
+    });
+
+    const updateResult = await adminClient
+      .from("calculation_runs")
+      .update({
+        account_structure_id: dependencyManifest.account_structure_id,
+        completed_at: new Date().toISOString(),
+        dependency_manifest: {
+          ...dependencyManifest,
+          mapping_coverage_status: mappingCoverageStatus
+        },
+        mapping_coverage_status: mappingCoverageStatus,
+        posting_run_ids: dependencyManifest.posting_run_ids,
+        run_status: runStatus,
+        source_import_batch_ids: dependencyManifest.trial_balance_import_batch_ids,
+        validation_run_ids: dependencyManifest.validation_run_ids
+      })
+      .eq("organization_id", request.organizationId)
+      .eq("calculation_run_id", calculationRunId);
+
+    if (updateResult.error) {
+      throw new Error(updateResult.error.message);
+    }
+
+    await writeAuditLog({
+      actionType:
+        mappingCoverageStatus === "Incomplete"
+          ? "mapping_coverage_incomplete"
+          : "calculation_run_completed",
+      adminClient,
+      calculationRunId,
+      organizationId: request.organizationId,
+      payload: {
+        calculation_run_id: calculationRunId,
+        mapping_coverage_status: mappingCoverageStatus,
+        result_counts: {
+          exceptions: results.exceptions.length,
+          financial_summary_results: results.financialSummaries.length,
+          mapping_coverage_results: results.mappingCoverage.length,
+          statement_summary_results: results.statementSummaries.length,
+          trend_results: results.trends.length,
+          variance_results: results.variances.length
+        },
+        run_status: runStatus
+      },
+      userId: request.userId
+    });
+
+    return {
+      calculationRunId,
+      mappingCoverageStatus,
+      runStatus
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Calculation run failed.";
+    await adminClient
+      .from("calculation_runs")
+      .update({
+        completed_at: new Date().toISOString(),
+        error_message: message,
+        is_current: false,
+        run_status: "failed"
+      })
+      .eq("organization_id", request.organizationId)
+      .eq("calculation_run_id", calculationRunId);
+
+    await writeAuditLog({
+      actionType: "calculation_run_failed",
+      adminClient,
+      calculationRunId,
+      organizationId: request.organizationId,
+      payload: { error_message: message },
+      userId: request.userId
+    });
+
+    throw error;
+  }
+}
+
+function validateCalculationRequest(request: RunCalculationRequest) {
+  if (!request.fiscalYear || request.fiscalYear < 1900) {
+    throw new Error("Choose a valid fiscal year.");
+  }
+
+  if (request.periodFrom < 0 || request.periodFrom > 13) {
+    throw new Error("Period from must be between 0 and 13.");
+  }
+
+  if (request.periodTo < 0 || request.periodTo > 13) {
+    throw new Error("Period to must be between 0 and 13.");
+  }
+
+  if (request.periodFrom > request.periodTo) {
+    throw new Error("Period from cannot be greater than period to.");
+  }
+}
+
+async function validateFiscalPeriods({
+  adminClient,
+  request
+}: {
+  adminClient: SupabaseClient;
+  request: RunCalculationRequest;
+}) {
+  const result = await adminClient
+    .from("fiscal_periods")
+    .select("period")
+    .eq("organization_id", request.organizationId)
+    .eq("fiscal_year", request.fiscalYear)
+    .gte("period", request.periodFrom)
+    .lte("period", request.periodTo)
+    .returns<Array<{ period: number }>>();
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+
+  if ((result.data ?? []).length === 0) {
+    throw new Error("No configured fiscal periods exist for the selected range.");
+  }
+}
+
+async function loadActivePostedLines({
+  adminClient,
+  request
+}: {
+  adminClient: SupabaseClient;
+  request: RunCalculationRequest;
+}) {
+  const result = await adminClient
+    .from("active_trial_balance_lines")
+    .select(
+      "trial_balance_line_id, organization_id, fiscal_year, period, full_account_number, fund_code, acfr_code, department_code, function_code, object_code, account_name, beginning_balance, debits, credits, net_change, ending_balance, import_batch_id, template_version_id, account_structure_id, validation_run_id, posting_run_id"
+    )
+    .eq("organization_id", request.organizationId)
+    .eq("fiscal_year", request.fiscalYear)
+    .gte("period", request.periodFrom)
+    .lte("period", request.periodTo)
+    .returns<ActiveTrialBalanceLine[]>();
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+
+  const lines = result.data ?? [];
+  if (lines.length === 0) {
+    throw new Error("No posted active trial balance data exists for this range.");
+  }
+
+  return lines;
+}
+
+async function loadComparisonLines({
+  adminClient,
+  currentLines,
+  request
+}: {
+  adminClient: SupabaseClient;
+  currentLines: ActiveTrialBalanceLine[];
+  request: RunCalculationRequest;
+}) {
+  const priorPeriod = request.periodFrom === request.periodTo ? request.periodTo - 1 : null;
+  const priorPeriodLines =
+    priorPeriod && priorPeriod >= 1
+      ? await loadLinesForPeriod({
+          adminClient,
+          fiscalYear: request.fiscalYear,
+          organizationId: request.organizationId,
+          periodFrom: priorPeriod,
+          periodTo: priorPeriod
+        })
+      : [];
+  const priorYearLines = await loadLinesForPeriod({
+    adminClient,
+    fiscalYear: request.fiscalYear - 1,
+    organizationId: request.organizationId,
+    periodFrom: request.periodFrom,
+    periodTo: request.periodTo
+  });
+  const currentPeriods = new Set(currentLines.map((line) => line.period));
+  const priorYearPeriods = new Set(priorYearLines.map((line) => line.period));
+
+  return {
+    priorPeriod: {
+      availability:
+        priorPeriodLines.length > 0 ? "available" : ("unavailable" as const),
+      lines: priorPeriodLines
+    },
+    priorYear: {
+      availability:
+        priorYearLines.length === 0
+          ? ("unavailable" as const)
+          : [...currentPeriods].every((period) => priorYearPeriods.has(period))
+            ? ("available" as const)
+            : ("partial" as const),
+      lines: priorYearLines
+    }
+  };
+}
+
+async function loadLinesForPeriod({
+  adminClient,
+  fiscalYear,
+  organizationId,
+  periodFrom,
+  periodTo
+}: {
+  adminClient: SupabaseClient;
+  fiscalYear: number;
+  organizationId: string;
+  periodFrom: number;
+  periodTo: number;
+}) {
+  const result = await adminClient
+    .from("active_trial_balance_lines")
+    .select(
+      "trial_balance_line_id, organization_id, fiscal_year, period, full_account_number, fund_code, acfr_code, department_code, function_code, object_code, account_name, beginning_balance, debits, credits, net_change, ending_balance, import_batch_id, template_version_id, account_structure_id, validation_run_id, posting_run_id"
+    )
+    .eq("organization_id", organizationId)
+    .eq("fiscal_year", fiscalYear)
+    .gte("period", periodFrom)
+    .lte("period", periodTo)
+    .returns<ActiveTrialBalanceLine[]>();
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+
+  return result.data ?? [];
+}
+
+function assertSingleActiveImportPerPeriod(lines: ActiveTrialBalanceLine[]) {
+  const importBatchesByPeriod = new Map<string, Set<string>>();
+
+  for (const line of lines) {
+    const key = `${line.fiscal_year}-${line.period}`;
+    const set = importBatchesByPeriod.get(key) ?? new Set<string>();
+    set.add(line.import_batch_id);
+    importBatchesByPeriod.set(key, set);
+  }
+
+  const conflicts = [...importBatchesByPeriod.entries()].filter(
+    ([, batchIds]) => batchIds.size > 1
+  );
+
+  if (conflicts.length > 0) {
+    throw new Error(
+      "Multiple active posted imports exist for at least one selected period. Calculation stopped to avoid double-counting."
+    );
+  }
+}
+
+async function loadReferenceRows({
+  adminClient,
+  organizationId
+}: {
+  adminClient: SupabaseClient;
+  organizationId: string;
+}) {
+  const [funds, objects, acfr, departments, functions] = await Promise.all([
+    loadReferenceTable({
+      adminClient,
+      codeField: "fund_code",
+      organizationId,
+      tableName: "funds"
+    }),
+    loadReferenceTable({
+      adminClient,
+      codeField: "object_code",
+      organizationId,
+      tableName: "objects"
+    }),
+    loadReferenceTable({
+      adminClient,
+      codeField: "acfr_code",
+      organizationId,
+      tableName: "acfr_mappings"
+    }),
+    loadReferenceTable({
+      adminClient,
+      codeField: "department_code",
+      organizationId,
+      tableName: "departments"
+    }),
+    loadReferenceTable({
+      adminClient,
+      codeField: "function_code",
+      organizationId,
+      tableName: "functions"
+    })
+  ]);
+
+  return {
+    acfr,
+    departments,
+    functions,
+    funds,
+    objects
+  };
+}
+
+async function loadReferenceTable({
+  adminClient,
+  codeField,
+  organizationId,
+  tableName
+}: {
+  adminClient: SupabaseClient;
+  codeField: string;
+  organizationId: string;
+  tableName: string;
+}) {
+  const result = await adminClient
+    .from(tableName)
+    .select("*")
+    .eq("organization_id", organizationId)
+    .order("mapping_version", { ascending: false })
+    .returns<ReferenceRow[]>();
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+
+  const byCode = new Map<string, ReferenceRow>();
+  for (const row of result.data ?? []) {
+    const code = text(row[codeField]);
+    if (code && !byCode.has(code)) {
+      byCode.set(code, row);
+    }
+  }
+
+  return byCode;
+}
+
+function enrichLines(
+  lines: ActiveTrialBalanceLine[],
+  references: Awaited<ReturnType<typeof loadReferenceRows>>
+): EnrichedLine[] {
+  return lines.map((line) => {
+    const fund = references.funds.get(text(line.fund_code));
+    const object = references.objects.get(text(line.object_code));
+    return {
+      ...line,
+      account_type: textOrNull(object?.account_type),
+      account_type_detailed: textOrNull(object?.account_type_detailed),
+      balance_sheet_category: textOrNull(object?.balance_sheet_category),
+      cash_flow_category: textOrNull(object?.cash_flow_category),
+      detailed_account_type: textOrNull(object?.detailed_account_type),
+      fund_type: textOrNull(fund?.fund_type),
+      reporting_model: textOrNull(fund?.reporting_model),
+      statement_category: textOrNull(object?.statement_category)
+    };
+  });
+}
+
+function buildMappingCoverageIssues({
+  lines,
+  references
+}: {
+  lines: ActiveTrialBalanceLine[];
+  references: Awaited<ReturnType<typeof loadReferenceRows>>;
+}) {
+  const issues: CoverageIssue[] = [];
+  const dimensions = [
+    {
+      codeField: "fund_code",
+      nameField: "fund_name",
+      referenceTable: "funds",
+      requiredFields: [
+        ["fund_type", "missing_fund_type", "Fund exists but is missing fund type.", "Warning"],
+        [
+          "reporting_model",
+          "missing_reporting_model",
+          "Fund exists but is missing reporting model.",
+          "High"
+        ]
+      ],
+      rows: references.funds,
+      segmentType: "fund"
+    },
+    {
+      codeField: "object_code",
+      nameField: "object_name",
+      referenceTable: "objects",
+      requiredFields: [
+        ["account_type", "missing_object_account_type", "Object exists but is missing account type.", "High"],
+        [
+          "statement_category",
+          "missing_object_statement_category",
+          "Object exists but is missing statement category.",
+          "High"
+        ],
+        [
+          "balance_sheet_category",
+          "missing_object_balance_sheet_category",
+          "Object exists but is missing balance sheet category.",
+          "High"
+        ],
+        [
+          "cash_flow_category",
+          "missing_object_cash_flow_category",
+          "Object exists but is missing cash flow category.",
+          "Warning"
+        ]
+      ],
+      rows: references.objects,
+      segmentType: "object"
+    },
+    {
+      codeField: "acfr_code",
+      nameField: "acfr_name",
+      referenceTable: "acfr_mappings",
+      requiredFields: [],
+      rows: references.acfr,
+      segmentType: "acfr"
+    },
+    {
+      codeField: "department_code",
+      nameField: "department_name",
+      referenceTable: "departments",
+      requiredFields: [],
+      rows: references.departments,
+      segmentType: "department"
+    },
+    {
+      codeField: "function_code",
+      nameField: "function_name",
+      referenceTable: "functions",
+      requiredFields: [],
+      rows: references.functions,
+      segmentType: "function"
+    }
+  ] as const;
+
+  for (const dimension of dimensions) {
+    const lineGroups = groupLinesByCode(
+      lines,
+      dimension.codeField as keyof ActiveTrialBalanceLine
+    );
+
+    for (const [code, groupedLines] of lineGroups.entries()) {
+      if (!code) continue;
+
+      const referenceRow = dimension.rows.get(code);
+      const affectedAmount = sum(groupedLines.map((line) => money(line.ending_balance)));
+      if (!referenceRow) {
+        issues.push({
+          affectedAmount,
+          affectedRowCount: groupedLines.length,
+          coverageIssueType: `missing_${dimension.segmentType}_mapping`,
+          message: `${dimension.segmentType} code ${code} is used by posted trial balance rows but is missing from ${dimension.referenceTable}.`,
+          recommendedAction: `Add ${code} to ${dimension.referenceTable} or correct the trial balance mapping.`,
+          referenceStatus: "missing",
+          referenceTable: dimension.referenceTable,
+          segmentCode: code,
+          segmentName: null,
+          segmentType: dimension.segmentType,
+          severity:
+            dimension.segmentType === "fund" || dimension.segmentType === "object"
+              ? "High"
+              : "Warning"
+        });
+        continue;
+      }
+
+      if (text(referenceRow.active_status) === "inactive") {
+        issues.push({
+          affectedAmount,
+          affectedRowCount: groupedLines.length,
+          coverageIssueType: "inactive_reference_mapping",
+          message: `${dimension.segmentType} code ${code} is inactive but is used by posted trial balance rows.`,
+          recommendedAction: "Reactivate the reference row or correct the posted trial balance mapping.",
+          referenceStatus: "inactive",
+          referenceTable: dimension.referenceTable,
+          segmentCode: code,
+          segmentName: textOrNull(referenceRow[dimension.nameField]),
+          segmentType: dimension.segmentType,
+          severity: "Warning"
+        });
+      }
+
+      for (const [field, issueType, message, severity] of dimension.requiredFields) {
+        if (!text(referenceRow[field])) {
+          issues.push({
+            affectedAmount,
+            affectedRowCount: groupedLines.length,
+            coverageIssueType: issueType,
+            message: `${message} Code: ${code}.`,
+            recommendedAction: `Update ${field} on ${dimension.referenceTable}.`,
+            referenceStatus: "incomplete",
+            referenceTable: dimension.referenceTable,
+            segmentCode: code,
+            segmentName: textOrNull(referenceRow[dimension.nameField]),
+            segmentType: dimension.segmentType,
+            severity: severity as CoverageIssue["severity"]
+          });
+        }
+      }
+
+      if (dimension.segmentType === "object") {
+        const detailed = text(referenceRow.detailed_account_type);
+        const accountDetailed = text(referenceRow.account_type_detailed);
+        if (!detailed && !accountDetailed) {
+          issues.push({
+            affectedAmount,
+            affectedRowCount: groupedLines.length,
+            coverageIssueType: "missing_object_detailed_account_type",
+            message: `Object code ${code} is missing account type detailed and detailed account type.`,
+            recommendedAction: "Populate account_type_detailed or detailed_account_type on the object mapping.",
+            referenceStatus: "incomplete",
+            referenceTable: dimension.referenceTable,
+            segmentCode: code,
+            segmentName: textOrNull(referenceRow[dimension.nameField]),
+            segmentType: "object",
+            severity: "High"
+          });
+        } else if (detailed && accountDetailed && detailed !== accountDetailed) {
+          issues.push({
+            affectedAmount,
+            affectedRowCount: groupedLines.length,
+            coverageIssueType: "conflicting_object_detailed_account_type",
+            message: `Object code ${code} has conflicting account_type_detailed and detailed_account_type values.`,
+            recommendedAction: "Choose the correct detailed object classification; account_type_detailed is used first.",
+            referenceStatus: "conflict",
+            referenceTable: dimension.referenceTable,
+            segmentCode: code,
+            segmentName: textOrNull(referenceRow[dimension.nameField]),
+            segmentType: "object",
+            severity: "High"
+          });
+        }
+      }
+    }
+  }
+
+  return issues;
+}
+
+function buildResults({
+  calculationRunId,
+  comparison,
+  coverageIssues,
+  enrichedLines,
+  request,
+  thresholdConfig
+}: {
+  calculationRunId: string;
+  comparison: Awaited<ReturnType<typeof loadComparisonLines>>;
+  coverageIssues: CoverageIssue[];
+  enrichedLines: EnrichedLine[];
+  request: RunCalculationRequest;
+  thresholdConfig: ThresholdConfig;
+}): ResultRows {
+  const importBatchIds = unique(enrichedLines.map((line) => line.import_batch_id));
+  const financialSummaries = buildFinancialSummaries({
+    calculationRunId,
+    importBatchIds,
+    lines: enrichedLines,
+    request
+  });
+  const statementSummaries = buildStatementSummaries({
+    calculationRunId,
+    importBatchIds,
+    lines: enrichedLines,
+    request
+  });
+  const variances = buildVarianceRows({
+    calculationRunId,
+    comparison,
+    currentLines: enrichedLines,
+    importBatchIds,
+    request,
+    thresholdConfig
+  });
+  const trends = buildTrendRows({
+    calculationRunId,
+    importBatchIds,
+    lines: enrichedLines,
+    request
+  });
+  const mappingCoverage = coverageIssues.map((issue) => ({
+    affected_amount: issue.affectedAmount,
+    affected_row_count: issue.affectedRowCount,
+    calculation_run_id: calculationRunId,
+    coverage_issue_type: issue.coverageIssueType,
+    fiscal_year: request.fiscalYear,
+    message: issue.message,
+    organization_id: request.organizationId,
+    period: request.periodTo,
+    recommended_action: issue.recommendedAction,
+    reference_status: issue.referenceStatus,
+    reference_table: issue.referenceTable,
+    segment_code: issue.segmentCode,
+    segment_name: issue.segmentName,
+    segment_type: issue.segmentType,
+    severity: issue.severity
+  }));
+  const exceptions = [
+    ...coverageIssues.map((issue) =>
+      buildExceptionRow({
+        calculationRunId,
+        category: "mapping_coverage",
+        currentAmount: issue.affectedAmount,
+        importBatchIds,
+        message: issue.message,
+        organizationId: request.organizationId,
+        period: request.periodTo,
+        recommendedAction: issue.recommendedAction,
+        request,
+        segmentCode: issue.segmentCode,
+        segmentType: issue.segmentType,
+        severity: issue.severity,
+        type: issue.coverageIssueType
+      })
+    ),
+    ...buildAvailabilityExceptions({
+      calculationRunId,
+      comparison,
+      importBatchIds,
+      request
+    }),
+    ...buildVarianceExceptions({
+      calculationRunId,
+      importBatchIds,
+      request,
+      variances
+    }),
+    ...buildCashExceptions({
+      calculationRunId,
+      importBatchIds,
+      lines: enrichedLines,
+      request
+    })
+  ];
+
+  return {
+    exceptions,
+    financialSummaries,
+    mappingCoverage,
+    statementSummaries,
+    trends,
+    variances
+  };
+}
+
+function buildFinancialSummaries({
+  calculationRunId,
+  importBatchIds,
+  lines,
+  request
+}: {
+  calculationRunId: string;
+  importBatchIds: string[];
+  lines: EnrichedLine[];
+  request: RunCalculationRequest;
+}) {
+  const dimensions = [
+    ["fund", "fund_code"],
+    ["department", "department_code"],
+    ["function", "function_code"],
+    ["acfr", "acfr_code"],
+    ["object", "object_code"],
+    ["account_type", "account_type"],
+    ["balance_sheet_category", "balance_sheet_category"],
+    ["account_type_detailed", "account_type_detailed"],
+    ["fund_type", "fund_type"],
+    ["reporting_model", "reporting_model"]
+  ] as const;
+  const rows: Record<string, unknown>[] = [];
+
+  rows.push(
+    buildFinancialSummaryRow({
+      calculationRunId,
+      importBatchIds,
+      lines,
+      request,
+      summaryKey: "all",
+      summaryType: request.timeView
+    })
+  );
+
+  for (const [summaryType, field] of dimensions) {
+    for (const [summaryKey, groupedLines] of groupEnrichedLines(lines, field)) {
+      if (!summaryKey) continue;
+      rows.push(
+        buildFinancialSummaryRow({
+          calculationRunId,
+          dimensionField: field,
+          importBatchIds,
+          lines: groupedLines,
+          request,
+          summaryKey,
+          summaryType
+        })
+      );
+    }
+  }
+
+  return rows;
+}
+
+function buildFinancialSummaryRow({
+  calculationRunId,
+  dimensionField,
+  importBatchIds,
+  lines,
+  request,
+  summaryKey,
+  summaryType
+}: {
+  calculationRunId: string;
+  dimensionField?: keyof EnrichedLine;
+  importBatchIds: string[];
+  lines: EnrichedLine[];
+  request: RunCalculationRequest;
+  summaryKey: string;
+  summaryType: string;
+}) {
+  const endingBalance = sum(lines.map((line) => money(line.ending_balance)));
+  const netChange = sum(lines.map((line) => money(line.net_change)));
+  const sample = lines[0];
+  const accountType = sample?.account_type ?? null;
+  const amountType =
+    request.timeView === "current_period"
+      ? "current_period_activity"
+      : request.timeView === "ytd"
+        ? "ytd_activity"
+        : "selected_range_activity";
+
+  return {
+    account_type: sample?.account_type ?? null,
+    account_type_detailed: sample?.account_type_detailed ?? null,
+    acfr_code: sample?.acfr_code ?? null,
+    amount_type: amountType,
+    amount_value: netChange,
+    balance_sheet_category: sample?.balance_sheet_category ?? null,
+    beginning_balance: sum(lines.map((line) => money(line.beginning_balance))),
+    calculation_run_id: calculationRunId,
+    credits: sum(lines.map((line) => money(line.credits))),
+    debits: sum(lines.map((line) => money(line.debits))),
+    department_code: sample?.department_code ?? null,
+    detailed_account_type: sample?.detailed_account_type ?? null,
+    ending_balance: endingBalance,
+    fiscal_year: request.fiscalYear,
+    function_code: sample?.function_code ?? null,
+    fund_code: sample?.fund_code ?? null,
+    fund_type: sample?.fund_type ?? null,
+    net_change: netChange,
+    object_code: sample?.object_code ?? null,
+    organization_id: request.organizationId,
+    period: request.periodTo,
+    period_from: request.periodFrom,
+    period_to: request.periodTo,
+    presentation_amount: presentationAmount({
+      accountType,
+      amount: netChange,
+      amountType: "activity"
+    }),
+    reporting_model: sample?.reporting_model ?? null,
+    result_payload: {
+      dimension_field: dimensionField ?? null,
+      line_count: lines.length
+    },
+    summary_key: summaryKey,
+    summary_scope: summaryType,
+    summary_type: summaryType,
+    trial_balance_import_batch_ids: importBatchIds
+  };
+}
+
+function buildStatementSummaries({
+  calculationRunId,
+  importBatchIds,
+  lines,
+  request
+}: {
+  calculationRunId: string;
+  importBatchIds: string[];
+  lines: EnrichedLine[];
+  request: RunCalculationRequest;
+}) {
+  const grouped = new Map<string, EnrichedLine[]>();
+  for (const line of lines) {
+    const category = getStatementCategory(line);
+    const reportingModel = line.reporting_model ?? "unclassified";
+    const key = `${reportingModel}|${category}`;
+    grouped.set(key, [...(grouped.get(key) ?? []), line]);
+  }
+
+  return [...grouped.entries()].map(([key, groupedLines], index) => {
+    const [reportingModel, category] = key.split("|");
+    const amount = sum(groupedLines.map((line) => money(line.net_change)));
+    const sample = groupedLines[0];
+    return {
+      amount,
+      amount_value: amount,
+      calculation_run_id: calculationRunId,
+      fiscal_year: request.fiscalYear,
+      fund_type: sample?.fund_type ?? null,
+      line_code: category,
+      line_item_category: category,
+      line_item_code: category,
+      line_item_name: titleize(category),
+      line_name: titleize(category),
+      line_order: index + 1,
+      organization_id: request.organizationId,
+      period_from: request.periodFrom,
+      period_to: request.periodTo,
+      presentation_amount: presentationAmount({
+        accountType: sample?.account_type,
+        amount,
+        amountType: "statement"
+      }),
+      reporting_model: reportingModel,
+      result_payload: {
+        line_count: groupedLines.length
+      },
+      sort_order: index + 1,
+      statement_type: getStatementType(reportingModel),
+      trial_balance_import_batch_ids: importBatchIds
+    };
+  });
+}
+
+function buildVarianceRows({
+  calculationRunId,
+  comparison,
+  currentLines,
+  importBatchIds,
+  request,
+  thresholdConfig
+}: {
+  calculationRunId: string;
+  comparison: Awaited<ReturnType<typeof loadComparisonLines>>;
+  currentLines: EnrichedLine[];
+  importBatchIds: string[];
+  request: RunCalculationRequest;
+  thresholdConfig: ThresholdConfig;
+}) {
+  const rows: Record<string, unknown>[] = [];
+  rows.push(
+    ...buildVarianceForComparison({
+      calculationRunId,
+      comparisonFiscalYear: request.fiscalYear,
+      comparisonLines: comparison.priorPeriod.lines,
+      comparisonPeriod: request.periodFrom - 1,
+      currentLines,
+      importBatchIds,
+      request,
+      thresholdConfig,
+      varianceType: "current_period_vs_prior_period"
+    })
+  );
+  rows.push(
+    ...buildVarianceForComparison({
+      calculationRunId,
+      comparisonFiscalYear: request.fiscalYear - 1,
+      comparisonLines: comparison.priorYear.lines,
+      comparisonPeriod: request.periodTo,
+      currentLines,
+      importBatchIds,
+      request,
+      thresholdConfig,
+      varianceType: request.timeView === "ytd" ? "ytd_vs_prior_year_ytd" : "current_period_vs_prior_year"
+    })
+  );
+
+  return rows;
+}
+
+function buildVarianceForComparison({
+  calculationRunId,
+  comparisonFiscalYear,
+  comparisonLines,
+  comparisonPeriod,
+  currentLines,
+  importBatchIds,
+  request,
+  thresholdConfig,
+  varianceType
+}: {
+  calculationRunId: string;
+  comparisonFiscalYear: number;
+  comparisonLines: ActiveTrialBalanceLine[];
+  comparisonPeriod: number;
+  currentLines: EnrichedLine[];
+  importBatchIds: string[];
+  request: RunCalculationRequest;
+  thresholdConfig: ThresholdConfig;
+  varianceType: string;
+}) {
+  if (comparisonLines.length === 0) {
+    return [];
+  }
+
+  const currentByObject = aggregateBy(currentLines, "object_code");
+  const comparisonByObject = aggregateBy(comparisonLines, "object_code");
+  const keys = unique([...currentByObject.keys(), ...comparisonByObject.keys()]);
+
+  return keys.map((key) => {
+    const currentAmount = currentByObject.get(key) ?? 0;
+    const comparisonAmount = comparisonByObject.get(key) ?? 0;
+    const varianceAmount = currentAmount - comparisonAmount;
+    const variancePercent =
+      Math.abs(comparisonAmount) < thresholdConfig.minimumBaseAmountForPercentageVariance
+        ? null
+        : varianceAmount / Math.abs(comparisonAmount);
+    const absoluteVarianceAmount = Math.abs(varianceAmount);
+    const sample = currentLines.find((line) => (line.object_code ?? "") === key);
+
+    return {
+      absolute_variance_amount: absoluteVarianceAmount,
+      account_type: sample?.account_type ?? null,
+      calculation_run_id: calculationRunId,
+      comparison_amount: comparisonAmount,
+      comparison_fiscal_year: comparisonFiscalYear,
+      comparison_period: comparisonPeriod,
+      comparison_type: varianceType,
+      current_amount: currentAmount,
+      fiscal_year: request.fiscalYear,
+      fund_type: sample?.fund_type ?? null,
+      object_code: key,
+      organization_id: request.organizationId,
+      period: request.periodTo,
+      reporting_model: sample?.reporting_model ?? null,
+      result_payload: {
+        minimum_base_amount_applied:
+          variancePercent === null &&
+          Math.abs(comparisonAmount) <
+            thresholdConfig.minimumBaseAmountForPercentageVariance
+      },
+      severity: classifyVarianceSeverity({
+        absoluteVarianceAmount,
+        thresholdConfig,
+        variancePercent
+      }),
+      trial_balance_import_batch_ids: importBatchIds,
+      variance_amount: varianceAmount,
+      variance_key: key || "unmapped_object",
+      variance_percent: variancePercent,
+      variance_scope: "object_code",
+      variance_type: varianceType
+    };
+  });
+}
+
+function buildTrendRows({
+  calculationRunId,
+  importBatchIds,
+  lines,
+  request
+}: {
+  calculationRunId: string;
+  importBatchIds: string[];
+  lines: EnrichedLine[];
+  request: RunCalculationRequest;
+}) {
+  const periodGroups = groupEnrichedLines(lines, "period");
+  return [...periodGroups.entries()].map(([period, groupedLines]) => {
+    const amount = sum(groupedLines.map((line) => money(line.net_change)));
+    const sample = groupedLines[0];
+    return {
+      account_type: sample?.account_type ?? null,
+      amount_type: "period_activity",
+      amount_value: amount,
+      calculation_run_id: calculationRunId,
+      fiscal_year: request.fiscalYear,
+      fund_type: sample?.fund_type ?? null,
+      organization_id: request.organizationId,
+      period: Number(period),
+      period_end: request.periodTo,
+      period_start: request.periodFrom,
+      presentation_amount: presentationAmount({
+        accountType: sample?.account_type,
+        amount,
+        amountType: "activity"
+      }),
+      reporting_model: sample?.reporting_model ?? null,
+      trend_key: String(period),
+      trend_payload: {
+        line_count: groupedLines.length
+      },
+      trend_scope: "period",
+      trend_type: request.timeView === "ytd" ? "ytd_trend" : "period_over_period",
+      trial_balance_import_batch_ids: importBatchIds
+    };
+  });
+}
+
+function buildAvailabilityExceptions({
+  calculationRunId,
+  comparison,
+  importBatchIds,
+  request
+}: {
+  calculationRunId: string;
+  comparison: Awaited<ReturnType<typeof loadComparisonLines>>;
+  importBatchIds: string[];
+  request: RunCalculationRequest;
+}) {
+  const rows: Record<string, unknown>[] = [];
+
+  if (comparison.priorYear.availability === "unavailable") {
+    rows.push(
+      buildExceptionRow({
+        calculationRunId,
+        category: "comparison_availability",
+        importBatchIds,
+        message: "Prior-year posted data is unavailable for the selected range.",
+        organizationId: request.organizationId,
+        period: request.periodTo,
+        recommendedAction: "Post prior-year actuals before relying on prior-year comparison outputs.",
+        request,
+        severity: "Info",
+        type: "missing_prior_year_comparison_data"
+      })
+    );
+  }
+
+  if (comparison.priorYear.availability === "partial") {
+    rows.push(
+      buildExceptionRow({
+        calculationRunId,
+        category: "comparison_availability",
+        importBatchIds,
+        message: "Prior-year posted data is only partially available for the selected range.",
+        organizationId: request.organizationId,
+        period: request.periodTo,
+        recommendedAction: "Post the missing prior-year periods or limit comparison ranges.",
+        request,
+        severity: "Warning",
+        type: "partial_prior_year_comparison_data"
+      })
+    );
+  }
+
+  return rows;
+}
+
+function buildVarianceExceptions({
+  calculationRunId,
+  importBatchIds,
+  request,
+  variances
+}: {
+  calculationRunId: string;
+  importBatchIds: string[];
+  request: RunCalculationRequest;
+  variances: Record<string, unknown>[];
+}) {
+  return variances
+    .filter((variance) => ["Warning", "High"].includes(String(variance.severity)))
+    .map((variance) =>
+      buildExceptionRow({
+        calculationRunId,
+        category: "variance",
+        currentAmount: Number(variance.current_amount ?? 0),
+        importBatchIds,
+        message: `Object ${variance.object_code ?? "unmapped"} has a material ${variance.variance_type} change.`,
+        organizationId: request.organizationId,
+        period: request.periodTo,
+        recommendedAction: "Review the underlying posted trial balance activity and object classification.",
+        request,
+        segmentCode: String(variance.object_code ?? ""),
+        segmentType: "object",
+        severity: variance.severity as "Warning" | "High",
+        type:
+          Math.abs(Number(variance.variance_percent ?? 0)) > 0
+            ? "large_percentage_change"
+            : "large_dollar_change",
+        varianceAmount: Number(variance.variance_amount ?? 0),
+        variancePercent:
+          variance.variance_percent === null
+            ? null
+            : Number(variance.variance_percent ?? 0)
+      })
+    );
+}
+
+function buildCashExceptions({
+  calculationRunId,
+  importBatchIds,
+  lines,
+  request
+}: {
+  calculationRunId: string;
+  importBatchIds: string[];
+  lines: EnrichedLine[];
+  request: RunCalculationRequest;
+}) {
+  const cashLines = lines.filter((line) => isCashLine(line));
+  const cashBalance = sum(cashLines.map((line) => money(line.ending_balance)));
+
+  if (cashLines.length === 0) {
+    return [
+      buildExceptionRow({
+        calculationRunId,
+        category: "cash_analysis",
+        importBatchIds,
+        message: "Cash accounts could not be identified from object classifications.",
+        organizationId: request.organizationId,
+        period: request.periodTo,
+        recommendedAction: "Populate cash-related object classifications before relying on cash analysis.",
+        request,
+        severity: "Warning",
+        type: "missing_mapping_classification"
+      })
+    ];
+  }
+
+  if (cashBalance < 0) {
+    return [
+      buildExceptionRow({
+        calculationRunId,
+        category: "cash_analysis",
+        currentAmount: cashBalance,
+        importBatchIds,
+        message: "Cash and investments balance is negative.",
+        organizationId: request.organizationId,
+        period: request.periodTo,
+        recommendedAction: "Review cash object mapping and posted trial balance amounts.",
+        request,
+        severity: "High",
+        type: "negative_cash_balance"
+      })
+    ];
+  }
+
+  return [];
+}
+
+function buildExceptionRow({
+  calculationRunId,
+  category,
+  currentAmount,
+  importBatchIds,
+  message,
+  organizationId,
+  period,
+  recommendedAction,
+  request,
+  segmentCode,
+  segmentType,
+  severity,
+  type,
+  varianceAmount,
+  variancePercent
+}: {
+  calculationRunId: string;
+  category: string;
+  currentAmount?: number;
+  importBatchIds: string[];
+  message: string;
+  organizationId: string;
+  period: number;
+  recommendedAction: string;
+  request: RunCalculationRequest;
+  segmentCode?: string;
+  segmentType?: string;
+  severity: "Info" | "Warning" | "High" | "Critical";
+  type: string;
+  varianceAmount?: number;
+  variancePercent?: number | null;
+}) {
+  const legacySeverity =
+    severity === "Critical" ? "critical" : severity === "Info" ? "info" : "warning";
+
+  return {
+    calculation_run_id: calculationRunId,
+    current_amount: currentAmount ?? null,
+    dollar_impact: currentAmount ?? varianceAmount ?? null,
+    exception_category: category,
+    exception_key: segmentCode ?? null,
+    exception_scope: segmentType ?? category,
+    exception_status: "open",
+    exception_type: type,
+    fiscal_year: request.fiscalYear,
+    message,
+    organization_id: organizationId,
+    period,
+    recommended_review_action: recommendedAction,
+    result_payload: {
+      recommended_action: recommendedAction
+    },
+    severity: legacySeverity,
+    severity_level: severity,
+    trial_balance_import_batch_ids: importBatchIds,
+    variance_amount: varianceAmount ?? null,
+    variance_percent: variancePercent ?? null
+  };
+}
+
+async function persistResults({
+  adminClient,
+  results
+}: {
+  adminClient: SupabaseClient;
+  results: ResultRows;
+}) {
+  await insertIfAny(adminClient, "mapping_coverage_results", results.mappingCoverage);
+  await insertIfAny(adminClient, "financial_summary_results", results.financialSummaries);
+  await insertIfAny(adminClient, "statement_summary_results", results.statementSummaries);
+  await insertIfAny(adminClient, "variance_results", results.variances);
+  await insertIfAny(adminClient, "trend_results", results.trends);
+  await insertIfAny(adminClient, "exception_results", results.exceptions);
+}
+
+async function insertIfAny(
+  adminClient: SupabaseClient,
+  table: string,
+  rows: Record<string, unknown>[]
+) {
+  if (rows.length === 0) return;
+  const result = await adminClient.from(table).insert(rows);
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+}
+
+async function markComparableRunsSuperseded({
+  adminClient,
+  calculationRunId,
+  request
+}: {
+  adminClient: SupabaseClient;
+  calculationRunId: string;
+  request: RunCalculationRequest;
+}) {
+  const result = await adminClient
+    .from("calculation_runs")
+    .update({
+      is_current: false,
+      is_stale: true,
+      run_status: "superseded",
+      superseded_by_calculation_run_id: calculationRunId
+    })
+    .eq("organization_id", request.organizationId)
+    .eq("fiscal_year", request.fiscalYear)
+    .eq("period_from", request.periodFrom)
+    .eq("period_to", request.periodTo)
+    .eq("time_view", request.timeView)
+    .eq("is_current", true)
+    .in("run_status", ["completed", "completed_with_warnings", "stale"]);
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+}
+
+async function loadSignConventionConfigId({
+  adminClient,
+  organizationId
+}: {
+  adminClient: SupabaseClient;
+  organizationId: string;
+}) {
+  const result = await adminClient
+    .from("sign_convention_configs")
+    .select("sign_convention_config_id")
+    .eq("organization_id", organizationId)
+    .eq("active_status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ sign_convention_config_id: string }>();
+
+  if (result.error) {
+    return null;
+  }
+
+  return result.data?.sign_convention_config_id ?? null;
+}
+
+function buildDependencyManifest({
+  comparison,
+  currentLines,
+  request,
+  signConventionConfigId,
+  thresholdConfig
+}: {
+  comparison: Awaited<ReturnType<typeof loadComparisonLines>>;
+  currentLines: ActiveTrialBalanceLine[];
+  request: RunCalculationRequest;
+  signConventionConfigId: string | null;
+  thresholdConfig: ThresholdConfig;
+}) {
+  return {
+    account_structure_id: firstNonEmpty(currentLines.map((line) => line.account_structure_id)),
+    calculation_parameters: buildParametersSnapshot(request),
+    calculation_version: CALCULATION_VERSION,
+    fiscal_year: request.fiscalYear,
+    mapping_coverage_status: "Pending",
+    period_from: request.periodFrom,
+    period_to: request.periodTo,
+    posting_run_ids: unique(currentLines.map((line) => line.posting_run_id).filter(Boolean)),
+    prior_period_available: comparison.priorPeriod.availability === "available",
+    prior_year_available: comparison.priorYear.availability === "available",
+    prior_year_partial: comparison.priorYear.availability === "partial",
+    selected_filters: {},
+    sign_convention_config_id: signConventionConfigId,
+    threshold_config_id: thresholdConfig.thresholdConfigId,
+    time_view: request.timeView,
+    trial_balance_import_batch_ids: unique(currentLines.map((line) => line.import_batch_id)),
+    validation_run_ids: unique(currentLines.map((line) => line.validation_run_id).filter(Boolean))
+  };
+}
+
+function buildParametersSnapshot(request: RunCalculationRequest) {
+  return {
+    calculation_version: CALCULATION_VERSION,
+    fiscal_year: request.fiscalYear,
+    period_from: request.periodFrom,
+    period_to: request.periodTo,
+    time_view: request.timeView
+  };
+}
+
+function getMappingCoverageStatus(issues: CoverageIssue[]) {
+  if (issues.length === 0) return "Complete";
+  if (issues.some((issue) => ["High", "Critical"].includes(issue.severity))) {
+    return "Incomplete";
+  }
+  return "Complete With Warnings";
+}
+
+function getStatementCategory(line: EnrichedLine) {
+  const category =
+    normalizeClassification(line.statement_category) ||
+    normalizeClassification(line.account_type_detailed) ||
+    normalizeClassification(line.detailed_account_type) ||
+    normalizeClassification(line.account_type);
+
+  if (category.includes("cash")) return "cash_and_investments";
+  if (category.includes("current_asset")) return "current_assets";
+  if (category.includes("current_liabil")) return "current_liabilities";
+  if (category.includes("liabil")) return "liabilities";
+  if (category.includes("asset")) return "assets";
+  if (category.includes("fund_balance")) return "fund_balance";
+  if (category.includes("net_position")) return "net_position";
+  if (category.includes("revenue")) return "revenues";
+  if (category.includes("expenditure")) return "expenditures";
+  if (category.includes("expense")) return "expenses";
+  if (category.includes("source")) return "other_financing_sources";
+  if (category.includes("use")) return "other_financing_uses";
+  return "unclassified";
+}
+
+function getStatementType(reportingModel: string) {
+  if (reportingModel === "proprietary") return "proprietary_statement";
+  if (reportingModel === "fiduciary") return "fiduciary_summary";
+  if (reportingModel === "component_unit") return "component_unit_summary";
+  return "governmental_statement";
+}
+
+function isCashLine(line: EnrichedLine) {
+  return [
+    line.balance_sheet_category,
+    line.account_type_detailed,
+    line.detailed_account_type,
+    line.cash_flow_category
+  ]
+    .map(normalizeClassification)
+    .some((value) => value.includes("cash"));
+}
+
+function groupLinesByCode(
+  lines: ActiveTrialBalanceLine[],
+  field: keyof ActiveTrialBalanceLine
+) {
+  const groups = new Map<string, ActiveTrialBalanceLine[]>();
+  for (const line of lines) {
+    const key = text(line[field]);
+    groups.set(key, [...(groups.get(key) ?? []), line]);
+  }
+  return groups;
+}
+
+function groupEnrichedLines<T extends keyof EnrichedLine>(
+  lines: EnrichedLine[],
+  field: T
+) {
+  const groups = new Map<string, EnrichedLine[]>();
+  for (const line of lines) {
+    const key = String(line[field] ?? "");
+    groups.set(key, [...(groups.get(key) ?? []), line]);
+  }
+  return groups;
+}
+
+function aggregateBy<T extends ActiveTrialBalanceLine | EnrichedLine>(
+  lines: T[],
+  field: keyof T
+) {
+  const groups = new Map<string, number>();
+  for (const line of lines) {
+    const key = String(line[field] ?? "");
+    groups.set(key, (groups.get(key) ?? 0) + money(line.net_change));
+  }
+  return groups;
+}
+
+function unique<T>(values: T[]) {
+  return [...new Set(values)];
+}
+
+function firstNonEmpty<T>(values: Array<T | null | undefined>) {
+  return values.find((value) => value !== null && value !== undefined) ?? null;
+}
+
+function sum(values: number[]) {
+  return values.reduce((total, value) => total + value, 0);
+}
+
+function money(value: number | string | null | undefined) {
+  const numeric = typeof value === "number" ? value : Number.parseFloat(value ?? "0");
+  return Number.isNaN(numeric) ? 0 : numeric;
+}
+
+function text(value: unknown) {
+  return value === null || value === undefined ? "" : String(value).trim();
+}
+
+function textOrNull(value: unknown) {
+  const normalized = text(value);
+  return normalized || null;
+}
+
+function titleize(value: string) {
+  return value
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+async function writeAuditLog({
+  actionType,
+  adminClient,
+  calculationRunId,
+  organizationId,
+  payload,
+  userId
+}: {
+  actionType: string;
+  adminClient: SupabaseClient;
+  calculationRunId: string;
+  organizationId: string;
+  payload: Record<string, unknown>;
+  userId: string;
+}) {
+  await adminClient.from("audit_logs").insert({
+    action_type: actionType,
+    actor_user_id: userId,
+    after_payload: payload,
+    entity_id: calculationRunId,
+    entity_table: "calculation_runs",
+    metadata: {
+      calculation_version: CALCULATION_VERSION,
+      slice: "9"
+    },
+    organization_id: organizationId
+  });
+}

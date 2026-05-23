@@ -69,9 +69,23 @@ versions, posting runs, and audit lineage. Advanced import, template, preview,
 validation, mapping review, posting, and archive/review pages remain available
 for detailed follow-up.
 
-## Slice 9: Analysis Outputs
+## Slice 9: Analysis Outputs, Calculation Engine MVP, and Mapping Coverage
 
-Implement reproducible trend and variance calculations after normalized data exists.
+Implement governed calculation runs over posted, active trial balance data only.
+Slice 9 generates current-period, YTD, and selected-range summaries, statement
+summary rows, variance rows, trend rows, exception rows, and mapping coverage
+results. Calculation runs store trial balance source batch IDs, posting run IDs,
+validation run IDs, account structure, threshold configuration, sign convention
+configuration, parameters, calculation version, and dependency manifests.
+
+Reference imports for Funds, Objects, ACFR, Departments, and Functions remain
+lightweight setup/reference imports. Slice 9 does not require raw reference
+import files or import batches for calculation reproducibility. Instead, mapping
+coverage reports missing or incomplete reference data used by posted trial
+balance rows.
+
+Slice 9 does not build dashboards, draft Monthly Finance Reports, export
+reports, import budgets, calculate budget variance, or add AI commentary.
 
 ## Slice 10: Dashboard Placeholders to Real Views
 

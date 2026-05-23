@@ -13,6 +13,7 @@
 - [x] Fund import page overhaul: Added PO List-style `/imports/funds` import panel, temporary preview/edit/exclude workflow, direct fund commit with mapping version creation, and read-only Funds table. Local typecheck, schema, lint, and build checks passed; npm test script is not defined.
 - [x] Objects, ACFR, Departments, and Functions import page overhaul: Added shared PO List-style import panels, temporary preview/edit/exclude workflow, direct reference commits with mapping version creation, legacy route redirects, and read-only reference tables. Local typecheck, schema, lint, and build checks passed; npm test script is not defined.
 - [x] Slice 9: Analysis outputs, calculation engine MVP, and mapping coverage. Local typecheck, schema, lint, and build checks passed; npm test script is not defined; Supabase CLI is not installed locally, so remote/local Supabase migration validation was not run by Codex.
+- [x] Fiscal year and period setup: Added `/setup/fiscal-years`, organization fiscal defaults, single-year creation, fiscal year range generation, missing-period generation, and fiscal setup navigation. Local schema, lint, typecheck, and build checks passed; npm test script is not defined; Supabase CLI is not installed locally, so remote/local Supabase migration validation was not run by Codex.
 - [ ] Slice 10: Dashboard views backed by governed data.
 - [ ] Slice 11: Monthly report drafting.
 - [ ] Slice 12: Report export and finalization.

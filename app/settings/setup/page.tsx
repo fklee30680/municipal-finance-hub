@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -42,6 +44,24 @@ export default function SetupPage() {
             rows={reportingPeriodOptions}
           />
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Fiscal Year and Period Setup</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              Generate fiscal years and periods for historical, current, and
+              future trial balance validation.
+            </p>
+            <Link
+              className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              href="/setup/fiscal-years"
+            >
+              Open fiscal year setup
+            </Link>
+          </CardContent>
+        </Card>
       </section>
     </AppShell>
   );

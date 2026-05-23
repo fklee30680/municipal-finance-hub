@@ -56,6 +56,12 @@ const analysisMigrationPath = join(
   "migrations",
   "20260523000100_analysis_outputs_mapping_coverage.sql"
 );
+const fiscalSetupMigrationPath = join(
+  root,
+  "supabase",
+  "migrations",
+  "20260523000200_fiscal_year_period_setup.sql"
+);
 
 const requiredTables = [
   "organizations",
@@ -361,6 +367,28 @@ if (!existsSync(analysisMigrationPath)) {
   }
 }
 
+if (!existsSync(fiscalSetupMigrationPath)) {
+  fail(`Missing fiscal setup migration: ${fiscalSetupMigrationPath}`);
+} else {
+  const fiscalSetupSql = readFileSync(fiscalSetupMigrationPath, "utf8");
+  const fiscalSetupSnippets = [
+    "fiscal_year_start_month",
+    "fiscal_year_start_day",
+    "fiscal_year_end_month",
+    "fiscal_year_end_day",
+    "soft_closed",
+    "Opening / Beginning Balance",
+    "Year-End / Accrual Adjustments",
+    "idx_fiscal_periods_year_id_period"
+  ];
+
+  for (const snippet of fiscalSetupSnippets) {
+    if (!fiscalSetupSql.includes(snippet)) {
+      fail(`Missing fiscal setup migration content: ${snippet}`);
+    }
+  }
+}
+
 const requiredDocs = [
   "docs/product-spec.md",
   "docs/build-plan.md",
@@ -408,6 +436,60 @@ if (!existsSync(setupPagePath)) {
   for (const label of setupPageLabels) {
     if (!setupPage.includes(label)) {
       fail(`Missing setup page label: ${label}`);
+    }
+  }
+}
+
+const fiscalSetupPagePath = join(root, "app", "setup", "fiscal-years", "page.tsx");
+const fiscalSetupActionsPath = join(root, "app", "setup", "fiscal-years", "actions.ts");
+const fiscalCalendarPath = join(root, "lib", "setup", "fiscal-calendar.ts");
+const fiscalSetupFormsPath = join(root, "components", "fiscal-setup-forms.tsx");
+
+for (const file of [
+  fiscalSetupPagePath,
+  fiscalSetupActionsPath,
+  fiscalCalendarPath,
+  fiscalSetupFormsPath
+]) {
+  if (!existsSync(file)) {
+    fail(`Missing fiscal setup file: ${file}`);
+  }
+}
+
+if (existsSync(fiscalCalendarPath)) {
+  const fiscalCalendar = readFileSync(fiscalCalendarPath, "utf8");
+  const fiscalCalendarSnippets = [
+    "calculateFiscalYearDateRange",
+    "buildMonthlyFiscalPeriods",
+    "Period 0",
+    "Period 13",
+    "monthFormatter",
+    "includePeriod0",
+    "includePeriod13"
+  ];
+
+  for (const snippet of fiscalCalendarSnippets) {
+    if (!fiscalCalendar.includes(snippet)) {
+      fail(`Missing fiscal calendar utility content: ${snippet}`);
+    }
+  }
+}
+
+if (existsSync(fiscalSetupPagePath)) {
+  const fiscalSetupPage = readFileSync(fiscalSetupPagePath, "utf8");
+  const fiscalSetupPageSnippets = [
+    "Fiscal Year Setup",
+    "Organization Fiscal Defaults",
+    "Create Fiscal Year",
+    "Generate Fiscal Year Range",
+    "Fiscal Years",
+    "Selected Fiscal Year Periods",
+    "Generate Missing Periods"
+  ];
+
+  for (const snippet of fiscalSetupPageSnippets) {
+    if (!fiscalSetupPage.includes(snippet)) {
+      fail(`Missing fiscal setup page content: ${snippet}`);
     }
   }
 }

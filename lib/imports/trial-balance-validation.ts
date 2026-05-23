@@ -23,6 +23,8 @@ type ImportBatchRecord = {
   source_file_id: string | null;
   template_version_id: string | null;
   account_structure_id: string | null;
+  fiscal_year_id: string | null;
+  fiscal_period_id: string | null;
   fiscal_year: number | null;
   period: number | null;
   metadata: Record<string, unknown> | null;
@@ -105,6 +107,14 @@ type OrganizationSettingsRecord = {
 type FiscalYearRecord = {
   fiscal_year_id: string;
   fiscal_year: number;
+  active_status: string;
+};
+
+type FiscalPeriodRecord = {
+  fiscal_period_id: string;
+  fiscal_year_id: string;
+  fiscal_year: number;
+  period: number;
   active_status: string;
 };
 
@@ -213,7 +223,14 @@ export async function runTrialBalanceValidation({
     importBatchId,
     organizationId
   });
-  const [previewRows, previewIssues, fieldMappings, settings, fiscalYearRecord] =
+  const [
+    previewRows,
+    previewIssues,
+    fieldMappings,
+    settings,
+    fiscalYearRecord,
+    fiscalPeriodRecord
+  ] =
     await Promise.all([
       loadPreviewRows({ adminClient, organizationId, previewRunId: previewRun.preview_run_id }),
       loadPreviewIssues({
@@ -227,7 +244,13 @@ export async function runTrialBalanceValidation({
         templateVersionId: templateVersion.template_version_id
       }),
       loadOrganizationSettings({ adminClient, organizationId }),
-      loadFiscalYear({ adminClient, fiscalYear: batch.fiscal_year, organizationId })
+      loadFiscalYear({ adminClient, fiscalYear: batch.fiscal_year, organizationId }),
+      loadFiscalPeriod({
+        adminClient,
+        fiscalYear: batch.fiscal_year,
+        organizationId,
+        period: batch.period
+      })
     ]);
 
   if (previewRows.length === 0) {
@@ -249,8 +272,18 @@ export async function runTrialBalanceValidation({
   validateFiscalPeriod({
     batch,
     exceptions,
+    fiscalPeriodRecord,
     fiscalYearRecord,
     settings
+  });
+  await linkImportBatchFiscalSetup({
+    adminClient,
+    batch,
+    fiscalPeriodRecord,
+    fiscalYearRecord,
+    importBatchId,
+    organizationId,
+    userId
   });
   await validatePeriodConflict({
     adminClient,
@@ -274,9 +307,10 @@ export async function runTrialBalanceValidation({
     }));
   }
 
+  const validationExceptions = dedupeValidationExceptions(exceptions);
   const validationRunId = randomUUID();
   const summary = summarizeValidation({
-    exceptions,
+    exceptions: validationExceptions,
     previewRows,
     validationRunId
   });
@@ -338,9 +372,9 @@ export async function runTrialBalanceValidation({
     }
   }
 
-  if (exceptions.length > 0) {
+  if (validationExceptions.length > 0) {
     const exceptionResult = await adminClient.from("import_exceptions").insert(
-      exceptions.map((exception) => ({
+      validationExceptions.map((exception) => ({
         organization_id: organizationId,
         import_batch_id: importBatchId,
         source_file_id: previewRun.source_file_id,
@@ -589,11 +623,13 @@ function validateFileSetup({
 function validateFiscalPeriod({
   batch,
   exceptions,
+  fiscalPeriodRecord,
   fiscalYearRecord,
   settings
 }: {
   batch: ImportBatchRecord;
   exceptions: ValidationExceptionDraft[];
+  fiscalPeriodRecord: FiscalPeriodRecord | null;
   fiscalYearRecord: FiscalYearRecord | null;
   settings: OrganizationSettingsRecord | null;
 }) {
@@ -603,19 +639,7 @@ function validateFiscalPeriod({
       message: "Fiscal year is required before validation.",
       targetFieldName: "fiscal_year"
     }));
-  } else {
-    const configuredFiscalYear =
-      settings?.current_fiscal_year &&
-      settings.current_fiscal_year.trim() === String(batch.fiscal_year);
-
-    if (!configuredFiscalYear && !fiscalYearRecord) {
-      exceptions.push(createException({
-        code: "invalid_fiscal_year",
-        message:
-          "Fiscal year is not present in fiscal_years and does not match current organization setup.",
-        targetFieldName: "fiscal_year"
-      }));
-    }
+    return;
   }
 
   if (batch.period === null || batch.period === undefined) {
@@ -627,8 +651,6 @@ function validateFiscalPeriod({
     return;
   }
 
-  const standardPeriodCount = settings?.standard_period_count ?? 12;
-
   if (batch.period < 0 || batch.period > 13) {
     exceptions.push(createException({
       code: "invalid_period",
@@ -636,7 +658,30 @@ function validateFiscalPeriod({
       targetFieldName: "period",
       transformedValue: String(batch.period)
     }));
+    return;
   }
+
+  if (!fiscalYearRecord || !fiscalPeriodRecord) {
+    exceptions.push(createException({
+      code: "invalid_fiscal_setup",
+      message: `Fiscal year ${batch.fiscal_year} and period ${batch.period} are not configured for this organization.`,
+      targetFieldName: "fiscal_year / period",
+      transformedValue: `${batch.fiscal_year}-${batch.period}`
+    }));
+    return;
+  }
+
+  if (fiscalPeriodRecord.fiscal_year_id !== fiscalYearRecord.fiscal_year_id) {
+    exceptions.push(createException({
+      code: "invalid_fiscal_setup",
+      message: `Fiscal year ${batch.fiscal_year} and period ${batch.period} are configured but are not linked to the same fiscal setup record.`,
+      targetFieldName: "fiscal_year / period",
+      transformedValue: `${batch.fiscal_year}-${batch.period}`
+    }));
+    return;
+  }
+
+  const standardPeriodCount = settings?.standard_period_count ?? 12;
 
   if (batch.period === 0 && !settings?.enable_period_0) {
     exceptions.push(createException({
@@ -712,12 +757,23 @@ function carryForwardPreviewIssues({
   previewIssues: PreviewIssueRecord[];
 }) {
   for (const issue of previewIssues) {
+    const isNumericParseFailure = issue.issue_code === "numeric_parse_failed";
+    const isMissingMappedField = issue.issue_code === "missing_required_mapped_field";
+
+    if (isMissingMappedField && hasRawIssueValueForSameField(previewIssues, issue)) {
+      continue;
+    }
+
     exceptions.push(createException({
       code:
-        issue.issue_code === "blank_row_skipped"
+        isNumericParseFailure
+          ? "invalid_numeric_value"
+          : issue.issue_code === "blank_row_skipped"
           ? "blank_row_skipped"
           : "preview_issue_carried_forward",
-      message: `Preview issue carried forward: ${issue.issue_code}. ${issue.issue_message}`,
+      message: isNumericParseFailure
+        ? `${issue.target_field_name ?? "Amount"} could not be parsed as a number. Raw value: ${issue.raw_value ?? "not available"}.`
+        : `Preview issue carried forward: ${issue.issue_code}. ${issue.issue_message}`,
       previewRowId: issue.preview_row_id,
       rawValue: issue.raw_value,
       rowNumber: issue.source_row_number,
@@ -779,6 +835,15 @@ function validateRequiredFields({
   for (const field of requiredTrialBalanceFields) {
     const value = row[field];
     if (value === null || value === undefined || value === "") {
+      if (hasExceptionForField({
+        code: "invalid_numeric_value",
+        exceptions,
+        field,
+        row
+      })) {
+        continue;
+      }
+
       exceptions.push(createException({
         code: "missing_required_field",
         message: `${field} is required.`,
@@ -801,7 +866,20 @@ function validateNumericFields({
 }) {
   for (const field of numericTrialBalanceFields) {
     const value = row[field];
-    if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    if (value === null || value === undefined || value === "") {
+      continue;
+    }
+
+    if (Number.isNaN(Number(value))) {
+      if (hasExceptionForField({
+        code: "invalid_numeric_value",
+        exceptions,
+        field,
+        row
+      })) {
+        continue;
+      }
+
       exceptions.push(createException({
         code: "invalid_numeric_value",
         message: `${field} must be numeric.`,
@@ -962,6 +1040,123 @@ function validateFinancialFormulas({
   }
 }
 
+function dedupeValidationExceptions(exceptions: ValidationExceptionDraft[]) {
+  const byKey = new Map<string, ValidationExceptionDraft>();
+
+  for (const exception of exceptions) {
+    const key = [
+      exception.previewRowId ?? exception.rowNumber ?? "import",
+      exception.targetFieldName ?? "",
+      getRootCauseCode(exception)
+    ].join("|");
+    const existing = byKey.get(key);
+
+    if (!existing || shouldReplaceException(existing, exception)) {
+      byKey.set(key, exception);
+    }
+  }
+
+  return [...byKey.values()];
+}
+
+function getRootCauseCode(exception: ValidationExceptionDraft) {
+  if (exception.exceptionCode === "invalid_numeric_value") {
+    return "numeric_parse";
+  }
+
+  if (
+    exception.exceptionCode === "missing_required_field" ||
+    (exception.exceptionCode === "preview_issue_carried_forward" &&
+      exception.exceptionMessage.includes("missing_required_mapped_field"))
+  ) {
+    return "required_field";
+  }
+
+  if (
+    exception.exceptionCode === "invalid_fiscal_setup" ||
+    exception.exceptionCode === "invalid_fiscal_year" ||
+    exception.exceptionCode === "invalid_period"
+  ) {
+    return "fiscal_setup";
+  }
+
+  return exception.exceptionCode;
+}
+
+function shouldReplaceException(
+  existing: ValidationExceptionDraft,
+  candidate: ValidationExceptionDraft
+) {
+  const existingPriority = getExceptionPriority(existing);
+  const candidatePriority = getExceptionPriority(candidate);
+
+  if (candidatePriority !== existingPriority) {
+    return candidatePriority > existingPriority;
+  }
+
+  if (!existing.rawValue && candidate.rawValue) {
+    return true;
+  }
+
+  if (existing.exceptionCode === "preview_issue_carried_forward" && candidate.exceptionCode !== existing.exceptionCode) {
+    return true;
+  }
+
+  return false;
+}
+
+function getExceptionPriority(exception: ValidationExceptionDraft) {
+  if (exception.exceptionCode === "invalid_fiscal_setup") {
+    return 40;
+  }
+
+  if (exception.exceptionCode === "invalid_numeric_value") {
+    return 30;
+  }
+
+  if (exception.exceptionCode === "missing_required_field") {
+    return 20;
+  }
+
+  if (exception.exceptionCode === "preview_issue_carried_forward") {
+    return 10;
+  }
+
+  return 15;
+}
+
+function hasExceptionForField({
+  code,
+  exceptions,
+  field,
+  row
+}: {
+  code: string;
+  exceptions: ValidationExceptionDraft[];
+  field: string;
+  row: PreviewRowRecord;
+}) {
+  return exceptions.some(
+    (exception) =>
+      exception.exceptionCode === code &&
+      exception.previewRowId === row.preview_row_id &&
+      exception.targetFieldName === field
+  );
+}
+
+function hasRawIssueValueForSameField(
+  previewIssues: PreviewIssueRecord[],
+  issue: PreviewIssueRecord
+) {
+  return previewIssues.some(
+    (candidate) =>
+      candidate.preview_row_id === issue.preview_row_id &&
+      candidate.target_field_name === issue.target_field_name &&
+      candidate.issue_code === "numeric_parse_failed" &&
+      Boolean(candidate.raw_value?.trim())
+  );
+}
+
 function summarizeValidation({
   exceptions,
   previewRows,
@@ -1074,7 +1269,7 @@ async function loadImportBatch({
   const result = await adminClient
     .from("import_batches")
     .select(
-      "import_batch_id, organization_id, import_type_id, source_file_id, template_version_id, account_structure_id, fiscal_year, period, metadata"
+      "import_batch_id, organization_id, import_type_id, source_file_id, template_version_id, account_structure_id, fiscal_year_id, fiscal_period_id, fiscal_year, period, metadata"
     )
     .eq("organization_id", organizationId)
     .eq("import_batch_id", importBatchId)
@@ -1312,6 +1507,84 @@ async function loadFiscalYear({
   }
 
   return result.data ?? null;
+}
+
+async function loadFiscalPeriod({
+  adminClient,
+  fiscalYear,
+  organizationId,
+  period
+}: {
+  adminClient: SupabaseClient;
+  fiscalYear: number | null;
+  organizationId: string;
+  period: number | null;
+}) {
+  if (!fiscalYear || period === null || period === undefined) {
+    return null;
+  }
+
+  const result = await adminClient
+    .from("fiscal_periods")
+    .select("fiscal_period_id, fiscal_year_id, fiscal_year, period, active_status")
+    .eq("organization_id", organizationId)
+    .eq("fiscal_year", fiscalYear)
+    .eq("period", period)
+    .eq("active_status", "active")
+    .maybeSingle<FiscalPeriodRecord>();
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+
+  return result.data ?? null;
+}
+
+async function linkImportBatchFiscalSetup({
+  adminClient,
+  batch,
+  fiscalPeriodRecord,
+  fiscalYearRecord,
+  importBatchId,
+  organizationId,
+  userId
+}: {
+  adminClient: SupabaseClient;
+  batch: ImportBatchRecord;
+  fiscalPeriodRecord: FiscalPeriodRecord | null;
+  fiscalYearRecord: FiscalYearRecord | null;
+  importBatchId: string;
+  organizationId: string;
+  userId: string;
+}) {
+  if (!fiscalYearRecord || !fiscalPeriodRecord) {
+    return;
+  }
+
+  if (fiscalPeriodRecord.fiscal_year_id !== fiscalYearRecord.fiscal_year_id) {
+    return;
+  }
+
+  if (
+    batch.fiscal_year_id === fiscalYearRecord.fiscal_year_id &&
+    batch.fiscal_period_id === fiscalPeriodRecord.fiscal_period_id
+  ) {
+    return;
+  }
+
+  const result = await adminClient
+    .from("import_batches")
+    .update({
+      fiscal_year_id: fiscalYearRecord.fiscal_year_id,
+      fiscal_period_id: fiscalPeriodRecord.fiscal_period_id,
+      updated_by: userId
+    })
+    .eq("organization_id", organizationId)
+    .eq("import_batch_id", importBatchId);
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
 }
 
 async function loadReferenceData({

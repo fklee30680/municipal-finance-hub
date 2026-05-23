@@ -420,6 +420,8 @@ function buildPreviewRows({
       ])
     );
     const transformedRowJson: Record<string, string | number | null> = {};
+    const rawValuesByTargetField: Record<string, string | undefined> = {};
+    const numericParseIssueFields = new Set<string>();
     const issues: PreviewIssueDraft[] = [];
 
     for (const mapping of fieldMappings) {
@@ -430,6 +432,7 @@ function buildPreviewRows({
         columnIndex >= 0
           ? rowValues[columnIndex] ?? ""
           : mapping.default_value ?? "";
+      rawValuesByTargetField[mapping.target_field_name] = rawValue;
       const transformedValue = applyCellTransformations({
         rules,
         targetFieldName: mapping.target_field_name,
@@ -446,7 +449,13 @@ function buildPreviewRows({
         transformedRowJson[mapping.target_field_name] = parsed.value;
 
         if (parsed.issue) {
-          issues.push(parsed.issue);
+          if (parsed.issue.issueCode === "numeric_parse_failed") {
+            numericParseIssueFields.add(mapping.target_field_name);
+          }
+          issues.push({
+            ...parsed.issue,
+            rawValue
+          });
         }
       } else {
         transformedRowJson[mapping.target_field_name] = transformedValue;
@@ -455,13 +464,23 @@ function buildPreviewRows({
 
     for (const requiredTargetField of requiredTargetFields) {
       const value = transformedRowJson[requiredTargetField];
+      const rawValue = rawValuesByTargetField[requiredTargetField] ?? "";
+      const rawValueExists = rawValue.trim().length > 0;
+
+      if (
+        numericParseIssueFields.has(requiredTargetField) &&
+        rawValueExists
+      ) {
+        continue;
+      }
 
       if (value === null || value === undefined || value === "") {
         issues.push({
           issueCode: "missing_required_mapped_field",
           issueMessage: `${requiredTargetField} is missing after mapping.`,
           issueSeverity: "error",
-          targetFieldName: requiredTargetField
+          targetFieldName: requiredTargetField,
+          rawValue: rawValueExists ? rawValue : undefined
         });
       }
     }

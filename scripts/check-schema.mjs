@@ -662,6 +662,24 @@ if (existsSync(previewEnginePath)) {
   }
 }
 
+const transformationEnginePath = join(root, "lib", "imports", "transformations.ts");
+if (existsSync(transformationEnginePath)) {
+  const transformationEngine = readFileSync(transformationEnginePath, "utf8");
+  const transformationSnippets = [
+    "normalizeAmountValue",
+    ".replace(/,/g, \"\")",
+    ".replace(/\\$/g, \"\")",
+    "startsWith(\"(\")",
+    "Object.is(parsedValue, -0)"
+  ];
+
+  for (const snippet of transformationSnippets) {
+    if (!transformationEngine.includes(snippet)) {
+      fail(`Missing trial balance numeric parsing support: ${snippet}`);
+    }
+  }
+}
+
 const previewPagePath = join(root, "app", "imports", "[importBatchId]", "preview", "page.tsx");
 if (existsSync(previewPagePath)) {
   const previewPage = readFileSync(previewPagePath, "utf8");
@@ -953,6 +971,10 @@ if (existsSync(validationEnginePath)) {
     "balance_formula_failure",
     "net_change_formula_failure",
     "period_conflict_active_data_exists",
+    "invalid_fiscal_setup",
+    "loadFiscalPeriod",
+    "linkImportBatchFiscalSetup",
+    "dedupeValidationExceptions",
     "batch_status: batchStatus",
     "is_active_for_reporting: false",
     "validation_warning_acknowledged"
@@ -972,6 +994,7 @@ if (existsSync(validationPagePath)) {
     "Trial Balance Validation",
     "Validation determines whether this import is eligible for posting",
     "Validation summary",
+    "Root Cause Summary",
     "Exception detail",
     "Warning acknowledgement",
     "Export CSV",

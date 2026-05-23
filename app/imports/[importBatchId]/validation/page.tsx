@@ -79,6 +79,14 @@ type ValidationExceptionRow = {
   exception_status: string;
 };
 
+type ValidationExceptionSummaryRow = {
+  severity: string;
+  exception_code: string;
+  exception_message: string;
+  target_field_name: string | null;
+  raw_value: string | null;
+};
+
 type MappingVersionLinkRow = {
   mapping_type: string;
   mapping_versions: Related<{
@@ -214,9 +222,27 @@ export default async function TrialBalanceValidationPage({
     exceptionQuery = exceptionQuery.eq("row_number", rowFilter);
   }
 
-  const [exceptionsResult, mappingVersionsResult, acknowledgementsResult, canAcknowledge] =
+  const exceptionSummaryQuery = latestValidation
+    ? adminClient
+        .from("import_exceptions")
+        .select("severity, exception_code, exception_message, target_field_name, raw_value")
+        .eq("organization_id", appUser.organization_id)
+        .eq("import_batch_id", importBatchId)
+        .eq("validation_run_id", latestValidation.validation_run_id)
+        .limit(5000)
+        .returns<ValidationExceptionSummaryRow[]>()
+    : null;
+
+  const [
+    exceptionsResult,
+    exceptionSummaryResult,
+    mappingVersionsResult,
+    acknowledgementsResult,
+    canAcknowledge
+  ] =
     await Promise.all([
       exceptionQuery.returns<ValidationExceptionRow[]>(),
+      exceptionSummaryQuery,
       latestValidation
         ? adminClient
             .from("validation_run_mapping_versions")
@@ -273,6 +299,8 @@ export default async function TrialBalanceValidationPage({
     templateVersionId: batch.template_version_id
   });
   const exceptions = exceptionsResult.data ?? [];
+  const exceptionSummaryRows = exceptionSummaryResult?.data ?? [];
+  const rootCauseSummaries = buildRootCauseSummaries(exceptionSummaryRows);
   const mappingVersionLinks = mappingVersionsResult?.data ?? [];
   const acknowledgements = acknowledgementsResult?.data ?? [];
   const warningAcknowledgementAllowed = Boolean(
@@ -441,6 +469,47 @@ export default async function TrialBalanceValidationPage({
 
             <Card>
               <CardHeader>
+                <CardTitle>Root Cause Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {exceptionSummaryResult?.error ? (
+                  <p className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
+                    Root cause summary could not be loaded:{" "}
+                    {exceptionSummaryResult.error.message}
+                  </p>
+                ) : null}
+                {rootCauseSummaries.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No root-cause issues were found for the latest validation run.
+                  </p>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {rootCauseSummaries.map((summary) => (
+                      <div
+                        className="rounded-md border border-border bg-card p-4 text-sm"
+                        key={summary.group}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-foreground">{summary.label}</p>
+                            <p className="mt-1 text-muted-foreground">{summary.message}</p>
+                          </div>
+                          <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+                            {summary.count}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-muted-foreground">
+                          {summary.suggestedFix}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle>Mapping versions used</CardTitle>
               </CardHeader>
               <CardContent>
@@ -601,6 +670,7 @@ export default async function TrialBalanceValidationPage({
                   <thead>
                     <tr className="border-b border-border text-muted-foreground">
                       <th className="py-3 pr-4 font-medium">Severity</th>
+                      <th className="py-3 pr-4 font-medium">Root cause</th>
                       <th className="py-3 pr-4 font-medium">Exception code</th>
                       <th className="py-3 pr-4 font-medium">Source row</th>
                       <th className="py-3 pr-4 font-medium">Source column</th>
@@ -619,6 +689,12 @@ export default async function TrialBalanceValidationPage({
                         key={exception.import_exception_id}
                       >
                         <td className="py-3 pr-4 text-muted-foreground">{exception.severity}</td>
+                        <td className="py-3 pr-4 text-muted-foreground">
+                          {getRootCauseLabel(
+                            exception.exception_code,
+                            exception.exception_message
+                          )}
+                        </td>
                         <td className="py-3 pr-4 text-muted-foreground">{exception.exception_code}</td>
                         <td className="py-3 pr-4 text-muted-foreground">{exception.row_number}</td>
                         <td className="py-3 pr-4 text-muted-foreground">{exception.source_column_name}</td>
@@ -726,6 +802,195 @@ function getSetupMessage({
   }
 
   return null;
+}
+
+function buildRootCauseSummaries(exceptions: ValidationExceptionSummaryRow[]) {
+  const groups = new Map<
+    string,
+    {
+      count: number;
+      fields: Set<string>;
+      rawValues: number;
+    }
+  >();
+
+  for (const exception of exceptions) {
+    const group = getRootCauseGroup(
+      exception.exception_code,
+      exception.exception_message
+    );
+    const existing =
+      groups.get(group) ??
+      {
+        count: 0,
+        fields: new Set<string>(),
+        rawValues: 0
+      };
+
+    existing.count += 1;
+
+    if (exception.target_field_name) {
+      existing.fields.add(exception.target_field_name);
+    }
+
+    if (exception.raw_value?.trim()) {
+      existing.rawValues += 1;
+    }
+
+    groups.set(group, existing);
+  }
+
+  return [...groups.entries()]
+    .map(([group, details]) => ({
+      count: details.count,
+      group,
+      label: getRootCauseLabelFromGroup(group),
+      message: getRootCauseMessage(group, details),
+      suggestedFix: getRootCauseSuggestedFix(group)
+    }))
+    .sort((left, right) => getRootCauseSortOrder(left.group) - getRootCauseSortOrder(right.group));
+}
+
+function getRootCauseGroup(exceptionCode: string, exceptionMessage = "") {
+  if (
+    exceptionCode === "invalid_fiscal_setup" ||
+    exceptionCode === "invalid_fiscal_year" ||
+    exceptionCode === "invalid_period"
+  ) {
+    return "fiscal_setup";
+  }
+
+  if (exceptionCode === "invalid_numeric_value") {
+    return "numeric_or_preview";
+  }
+
+  if (
+    exceptionCode === "preview_issue_carried_forward" &&
+    exceptionMessage.includes("numeric_parse_failed")
+  ) {
+    return "numeric_or_preview";
+  }
+
+  if (
+    exceptionCode === "missing_required_field" ||
+    (exceptionCode === "preview_issue_carried_forward" &&
+      exceptionMessage.includes("missing_required_mapped_field"))
+  ) {
+    return "required_fields";
+  }
+
+  if (
+    exceptionCode === "unparseable_account_number" ||
+    exceptionCode === "account_segment_count_mismatch" ||
+    exceptionCode === "duplicate_full_account_number"
+  ) {
+    return "account_parsing";
+  }
+
+  if (exceptionCode.startsWith("missing_") && exceptionCode.endsWith("_mapping")) {
+    return "reference_mapping";
+  }
+
+  if (
+    exceptionCode === "balance_formula_failure" ||
+    exceptionCode === "net_change_formula_failure"
+  ) {
+    return "formula_checks";
+  }
+
+  if (exceptionCode === "period_conflict_active_data_exists") {
+    return "period_conflict";
+  }
+
+  return "other";
+}
+
+function getRootCauseLabel(exceptionCode: string, exceptionMessage = "") {
+  return getRootCauseLabelFromGroup(getRootCauseGroup(exceptionCode, exceptionMessage));
+}
+
+function getRootCauseLabelFromGroup(group: string) {
+  const labels: Record<string, string> = {
+    account_parsing: "Account Parsing",
+    fiscal_setup: "Fiscal Setup",
+    formula_checks: "Formula Checks",
+    numeric_or_preview: "Numeric Parsing",
+    other: "Other",
+    period_conflict: "Period Conflict",
+    reference_mapping: "Reference Mapping",
+    required_fields: "Required Fields"
+  };
+
+  return labels[group] ?? "Other";
+}
+
+function getRootCauseMessage(
+  group: string,
+  details: {
+    count: number;
+    fields: Set<string>;
+    rawValues: number;
+  }
+) {
+  if (group === "fiscal_setup") {
+    return "Fiscal year or period setup is missing, inactive, or not linked to the import batch.";
+  }
+
+  if (group === "numeric_or_preview") {
+    return `${details.count} amount or preview issue${details.count === 1 ? "" : "s"} across ${details.fields.size || "unknown"} field${details.fields.size === 1 ? "" : "s"}. Rows with raw values are shown in detail.`;
+  }
+
+  if (group === "required_fields") {
+    return "Required mapped values are blank or absent after preview.";
+  }
+
+  if (group === "reference_mapping") {
+    return "Preview-row codes are missing from committed reference mappings.";
+  }
+
+  if (group === "account_parsing") {
+    return "Account numbers or parsed account segments do not match the configured structure.";
+  }
+
+  if (group === "formula_checks") {
+    return "Trial balance formula checks did not tie using the MVP sign convention.";
+  }
+
+  if (group === "period_conflict") {
+    return "Active posted data already exists for this fiscal year and period.";
+  }
+
+  return "Review the exception details below.";
+}
+
+function getRootCauseSuggestedFix(group: string) {
+  const fixes: Record<string, string> = {
+    account_parsing: "Correct the account structure or source account numbers, then regenerate preview.",
+    fiscal_setup: "Configure the fiscal year and period in Setup, then rerun validation.",
+    formula_checks: "Check beginning balance, debits, credits, net change, and ending balance.",
+    numeric_or_preview: "Regenerate preview after the parser fix. Remaining rows here usually mean a truly invalid amount or template issue.",
+    other: "Review the detailed exception message and suggested fix.",
+    period_conflict: "Use the replacement workflow before posting another active import for the same period.",
+    reference_mapping: "Import or correct the missing reference mappings, then rerun validation.",
+    required_fields: "Fix the source file or template mapping, regenerate preview, and rerun validation."
+  };
+
+  return fixes[group] ?? fixes.other;
+}
+
+function getRootCauseSortOrder(group: string) {
+  const order: Record<string, number> = {
+    fiscal_setup: 1,
+    numeric_or_preview: 2,
+    required_fields: 3,
+    account_parsing: 4,
+    reference_mapping: 5,
+    formula_checks: 6,
+    period_conflict: 7,
+    other: 8
+  };
+
+  return order[group] ?? 99;
 }
 
 function formatDate(value: string) {

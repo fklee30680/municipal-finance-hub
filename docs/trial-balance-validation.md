@@ -13,6 +13,10 @@ Validation is available from `/imports/[importBatchId]/validation` for `trial_ba
 - Captures mapping versions used where committed mappings provide `mapping_version_id`.
 - Updates the import batch to `validation_failed`, `validated_with_warnings`, or `validated`.
 
+Amount parsing supports normal municipal trial balance formatting before validation runs. The preview parser accepts plain numbers, comma-formatted values, dollar signs, `.00`, negative values, and parentheses negatives for amount fields only. Account numbers and segment codes remain text so leading zeros are preserved.
+
+Fiscal setup is required. When an import batch has fiscal year and period values, validation looks for active matching rows in `fiscal_years` and `fiscal_periods` for the same organization. If both records exist, the import batch is linked to their IDs. If either setup record is missing, validation creates one clear fiscal setup error and posting remains blocked until Setup is corrected and validation is rerun.
+
 ## Persistence
 
 Validation state is stored in:
@@ -23,6 +27,8 @@ Validation state is stored in:
 - `warning_acknowledgements`
 
 `import_exceptions` stores row-level exception details including source row, source column, target field, raw value, transformed value, severity, message, suggested fix, and resolution status.
+
+Validation output also groups exceptions by root cause in the UI so setup errors, numeric parsing, required fields, account parsing, reference mappings, formula checks, and period conflicts are easier to separate. Preview numeric parse issues are not duplicated as both missing and invalid field errors when the raw mapped value exists.
 
 ## Severity and Eligibility
 

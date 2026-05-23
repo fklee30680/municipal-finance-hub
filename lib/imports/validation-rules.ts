@@ -36,7 +36,7 @@ export const validationRuleCatalog: ValidationRuleDefinition[] = [
     category: "numeric_parse",
     code: "invalid_numeric_value",
     defaultSeverity: "critical_error",
-    suggestedFix: "Correct the numeric value in the source file and regenerate preview."
+    suggestedFix: "Correct values that are not valid numbers, then regenerate preview. Commas, dollar signs, .00, negatives, and parentheses negatives are supported."
   },
   {
     category: "account_parse",
@@ -109,6 +109,12 @@ export const validationRuleCatalog: ValidationRuleDefinition[] = [
     code: "invalid_fiscal_year",
     defaultSeverity: "critical_error",
     suggestedFix: "Select or configure a valid fiscal year before validation."
+  },
+  {
+    category: "fiscal_period",
+    code: "invalid_fiscal_setup",
+    defaultSeverity: "critical_error",
+    suggestedFix: "Configure the fiscal year and period in Setup, then rerun validation."
   },
   {
     category: "fiscal_period",

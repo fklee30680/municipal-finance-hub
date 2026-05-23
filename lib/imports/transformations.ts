@@ -102,7 +102,8 @@ export function parsePreviewNumber({
     };
   }
 
-  const parsedValue = Number(trimmedValue);
+  const normalizedValue = normalizeAmountValue(trimmedValue);
+  const parsedValue = Number(normalizedValue);
 
   if (Number.isNaN(parsedValue)) {
     return {
@@ -114,15 +115,40 @@ export function parsePreviewNumber({
         sourceColumnName,
         targetFieldName,
         rawValue,
-        transformedValue: rawValue
+        transformedValue: normalizedValue
       }
     };
   }
 
   return {
-    value: parsedValue,
+    value: Object.is(parsedValue, -0) ? 0 : parsedValue,
     issue: null
   };
+}
+
+export function normalizeAmountValue(rawValue: string) {
+  const trimmedValue = rawValue.trim();
+  const isParenthesesNegative =
+    trimmedValue.startsWith("(") && trimmedValue.endsWith(")");
+  const withoutParentheses = isParenthesesNegative
+    ? trimmedValue.slice(1, -1).trim()
+    : trimmedValue;
+  let normalizedValue = withoutParentheses
+    .replace(/\$/g, "")
+    .replace(/,/g, "")
+    .replace(/\s+/g, "");
+
+  if (normalizedValue.startsWith("-.")) {
+    normalizedValue = `-0${normalizedValue.slice(1)}`;
+  } else if (normalizedValue.startsWith(".")) {
+    normalizedValue = `0${normalizedValue}`;
+  }
+
+  if (isParenthesesNegative && normalizedValue && !normalizedValue.startsWith("-")) {
+    normalizedValue = `-${normalizedValue}`;
+  }
+
+  return normalizedValue;
 }
 
 export function isBlankPreviewRow(values: string[]) {

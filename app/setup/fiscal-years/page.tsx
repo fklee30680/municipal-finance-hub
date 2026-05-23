@@ -20,6 +20,8 @@ import { requireUser } from "@/lib/auth/session";
 import { defaultFiscalCalendarDefaults } from "@/lib/setup/fiscal-calendar";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+type AdminClient = ReturnType<typeof createAdminClient>;
+
 type Related<T> = T | T[] | null;
 
 type OrganizationRow = {
@@ -30,6 +32,8 @@ type OrganizationRow = {
 type OrganizationSettingsRow = {
   organization_display_name: string | null;
   current_fiscal_year: string | null;
+  fiscal_year_start_date?: string | null;
+  fiscal_year_end_date?: string | null;
   fiscal_year_start_month: number | null;
   fiscal_year_start_day: number | null;
   fiscal_year_end_month: number | null;
@@ -72,19 +76,16 @@ export default async function FiscalYearsSetupPage({
   const authUser = await requireUser();
   const adminClient = createAdminClient();
   const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
-  const [organizationResult, settingsResult, fiscalYearsResult] = await Promise.all([
+  const [organizationResult, settings, fiscalYearsResult] = await Promise.all([
     adminClient
       .from("organizations")
       .select("organization_id, organization_name")
       .eq("organization_id", appUser.organization_id)
       .maybeSingle<OrganizationRow>(),
-    adminClient
-      .from("organization_settings")
-      .select(
-        "organization_display_name, current_fiscal_year, fiscal_year_start_month, fiscal_year_start_day, fiscal_year_end_month, fiscal_year_end_day, enable_period_0, enable_period_13, period_0_label, period_13_label"
-      )
-      .eq("organization_id", appUser.organization_id)
-      .maybeSingle<OrganizationSettingsRow>(),
+    loadOrganizationSettings({
+      adminClient,
+      organizationId: appUser.organization_id
+    }),
     adminClient
       .from("fiscal_years")
       .select(
@@ -99,16 +100,11 @@ export default async function FiscalYearsSetupPage({
     throw new Error(organizationResult.error.message);
   }
 
-  if (settingsResult.error) {
-    throw new Error(settingsResult.error.message);
-  }
-
   if (fiscalYearsResult.error) {
     throw new Error(fiscalYearsResult.error.message);
   }
 
   const organization = organizationResult.data;
-  const settings = settingsResult.data;
   const fiscalYears = fiscalYearsResult.data ?? [];
   const selectedFiscalYear =
     Number.parseInt(filters.fiscalYear ?? "", 10) ||
@@ -133,15 +129,19 @@ export default async function FiscalYearsSetupPage({
     currentFiscalYear: settings?.current_fiscal_year ?? "",
     fiscalYearEndDay:
       settings?.fiscal_year_end_day ??
+      getDayFromDate(settings?.fiscal_year_end_date) ??
       defaultFiscalCalendarDefaults.fiscalYearEndDay,
     fiscalYearEndMonth:
       settings?.fiscal_year_end_month ??
+      getMonthFromDate(settings?.fiscal_year_end_date) ??
       defaultFiscalCalendarDefaults.fiscalYearEndMonth,
     fiscalYearStartDay:
       settings?.fiscal_year_start_day ??
+      getDayFromDate(settings?.fiscal_year_start_date) ??
       defaultFiscalCalendarDefaults.fiscalYearStartDay,
     fiscalYearStartMonth:
       settings?.fiscal_year_start_month ??
+      getMonthFromDate(settings?.fiscal_year_start_date) ??
       defaultFiscalCalendarDefaults.fiscalYearStartMonth,
     includePeriod0:
       settings?.enable_period_0 ??
@@ -471,9 +471,77 @@ function HiddenDefaults({
   );
 }
 
+async function loadOrganizationSettings({
+  adminClient,
+  organizationId
+}: {
+  adminClient: AdminClient;
+  organizationId: string;
+}) {
+  const extendedResult = await adminClient
+    .from("organization_settings")
+    .select(
+      "organization_display_name, current_fiscal_year, fiscal_year_start_month, fiscal_year_start_day, fiscal_year_end_month, fiscal_year_end_day, enable_period_0, enable_period_13, period_0_label, period_13_label"
+    )
+    .eq("organization_id", organizationId)
+    .maybeSingle<OrganizationSettingsRow>();
+
+  if (!extendedResult.error) {
+    return extendedResult.data ?? null;
+  }
+
+  const legacyResult = await adminClient
+    .from("organization_settings")
+    .select(
+      "organization_display_name, current_fiscal_year, fiscal_year_start_date, fiscal_year_end_date, enable_period_0, enable_period_13, period_0_label, period_13_label"
+    )
+    .eq("organization_id", organizationId)
+    .maybeSingle<
+      Omit<
+        OrganizationSettingsRow,
+        | "fiscal_year_end_day"
+        | "fiscal_year_end_month"
+        | "fiscal_year_start_day"
+        | "fiscal_year_start_month"
+      >
+    >();
+
+  if (legacyResult.error) {
+    throw new Error(legacyResult.error.message);
+  }
+
+  return legacyResult.data
+    ? {
+        ...legacyResult.data,
+        fiscal_year_end_day: null,
+        fiscal_year_end_month: null,
+        fiscal_year_start_day: null,
+        fiscal_year_start_month: null
+      }
+    : null;
+}
+
 function getPeriodCount(value: FiscalYearRow["fiscal_periods"]) {
   const record = Array.isArray(value) ? value[0] : value;
   return record && "count" in record ? record.count : 0;
+}
+
+function getMonthFromDate(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date.getUTCMonth() + 1;
+}
+
+function getDayFromDate(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date.getUTCDate();
 }
 
 function MiniSelect({

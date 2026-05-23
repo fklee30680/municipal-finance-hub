@@ -2,12 +2,14 @@
 
 import { useActionState } from "react";
 
-import {
-  initialCalculationRunActionState,
-  runCalculationAction
-} from "@/app/analysis/calculation-runs/actions";
+import { runCalculationAction } from "@/app/analysis/calculation-runs/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+const initialCalculationRunActionState = {
+  message: null,
+  status: "idle" as const
+};
 
 export function CalculationRunForm({
   defaultFiscalYear,

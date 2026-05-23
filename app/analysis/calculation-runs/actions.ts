@@ -13,11 +13,6 @@ export type CalculationRunActionState = {
   status: "idle" | "success" | "error";
 };
 
-export const initialCalculationRunActionState: CalculationRunActionState = {
-  message: null,
-  status: "idle"
-};
-
 export async function runCalculationAction(
   _previousState: CalculationRunActionState,
   formData: FormData

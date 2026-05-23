@@ -69,14 +69,14 @@ export function FundImportForm() {
           <div>
             <h2 className="text-base font-semibold text-foreground">Import Funds</h2>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              For column fields, enter the column header name or spreadsheet
-              column letter, such as A, B, C.
+              For mapping fields, enter the column header name, spreadsheet
+              column letter, or column number.
             </p>
           </div>
 
           <section>
             <h3 className="text-sm font-semibold text-foreground">Import Mapping</h3>
-            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-3 max-w-xs">
               <TextInput
                 defaultValue="1"
                 helperText="Enter the row number that contains column headers."
@@ -85,56 +85,58 @@ export function FundImportForm() {
                 required
                 type="number"
               />
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <TextInput
                 defaultValue="Fund Code"
-                label="Fund Code Column"
+                label="Fund Code"
                 name="fundCodeColumn"
                 required
               />
               <TextInput
                 defaultValue="Fund Name"
-                label="Fund Name Column"
+                label="Fund Name"
                 name="fundNameColumn"
                 required
               />
               <TextInput
                 defaultValue="Fund Type"
-                label="Fund Type Column"
+                label="Fund Type"
                 name="fundTypeColumn"
               />
               <TextInput
                 defaultValue="Reporting Model"
-                label="Reporting Model Column"
+                label="Reporting Model"
                 name="reportingModelColumn"
               />
               <TextInput
                 defaultValue="Fund Group"
-                label="Fund Group Column"
+                label="Fund Group"
                 name="fundGroupColumn"
               />
               <TextInput
                 defaultValue="Major Fund Flag"
-                label="Major Fund Flag Column"
+                label="Major Fund Flag"
                 name="majorFundFlagColumn"
               />
               <TextInput
                 defaultValue="Effective Start Date"
-                label="Effective Start Date Column"
+                label="Effective Start Date"
                 name="effectiveStartDateColumn"
               />
               <TextInput
                 defaultValue="Effective End Date"
-                label="Effective End Date Column"
+                label="Effective End Date"
                 name="effectiveEndDateColumn"
               />
               <TextInput
                 defaultValue="Active Status"
-                label="Active Status Column"
+                label="Active Status"
                 name="activeStatusColumn"
               />
               <TextInput
                 defaultValue="Change Reason"
-                label="Change Reason Column"
+                label="Change Reason"
                 name="changeReasonColumn"
               />
               <TextInput
@@ -143,6 +145,8 @@ export function FundImportForm() {
                 name="sheetReference"
                 placeholder="Sheet1 or 1"
               />
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               <CheckboxInput
                 helperText="Imported nonblank values overwrite saved values."
                 label="Update existing funds"
@@ -455,7 +459,7 @@ function TextInput({
   type?: string;
 }) {
   return (
-    <label className="text-xs font-semibold uppercase text-muted-foreground">
+    <label className="block text-xs font-semibold uppercase text-muted-foreground">
       {label}
       <input
         className={fieldClass}

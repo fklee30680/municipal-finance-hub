@@ -766,12 +766,13 @@ if (existsSync(fundImportFormPath)) {
   const fundImportForm = readFileSync(fundImportFormPath, "utf8");
   const fundImportFormSnippets = [
     "Import Funds",
-    "Fund Code Column",
+    "Fund Code",
     "Update existing funds",
     "Fill missing data on existing funds",
     "Fund Import Preview",
     "Delete / exclude",
     "Commit Funds",
+    "xl:grid-cols-4",
     "Bad-data report"
   ];
 
@@ -780,16 +781,29 @@ if (existsSync(fundImportFormPath)) {
       fail(`Missing fund import form content: ${snippet}`);
     }
   }
+
+  const removedFundColumnLabels = [
+    "Fund Code Column",
+    "Fund Name Column",
+    "Fund Type Column",
+    "Reporting Model Column"
+  ];
+
+  for (const snippet of removedFundColumnLabels) {
+    if (fundImportForm.includes(`label="${snippet}"`)) {
+      fail(`Fund import form still uses noisy mapping label: ${snippet}`);
+    }
+  }
 }
 
 const simpleReferenceConfigPath = join(root, "lib", "imports", "simple-reference-import-config.ts");
 if (existsSync(simpleReferenceConfigPath)) {
   const simpleReferenceConfig = readFileSync(simpleReferenceConfigPath, "utf8");
   const configSnippets = [
-    "Object Code Column",
-    "ACFR Code Column",
-    "Department Code Column",
-    "Function Code Column",
+    "Object Code",
+    "ACFR Code",
+    "Department Code",
+    "Function Code",
     "account_type_detailed",
     "function_description",
     "department_group",
@@ -799,6 +813,19 @@ if (existsSync(simpleReferenceConfigPath)) {
   for (const snippet of configSnippets) {
     if (!simpleReferenceConfig.includes(snippet)) {
       fail(`Missing simple reference import config content: ${snippet}`);
+    }
+  }
+
+  const removedSimpleReferenceLabels = [
+    "Object Code Column",
+    "ACFR Code Column",
+    "Department Code Column",
+    "Function Code Column"
+  ];
+
+  for (const snippet of removedSimpleReferenceLabels) {
+    if (simpleReferenceConfig.includes(`"${snippet}"`)) {
+      fail(`Simple reference import config still uses noisy mapping label: ${snippet}`);
     }
   }
 }
@@ -827,9 +854,11 @@ const simpleReferenceFormPath = join(root, "components", "simple-reference-impor
 if (existsSync(simpleReferenceFormPath)) {
   const simpleReferenceForm = readFileSync(simpleReferenceFormPath, "utf8");
   const formSnippets = [
+    "For mapping fields, enter the column header name, spreadsheet",
     "Import Mapping",
     "Update existing",
     "Fill missing data on existing",
+    "xl:grid-cols-4",
     "Delete / exclude",
     "Bad-data report",
     "Commit"

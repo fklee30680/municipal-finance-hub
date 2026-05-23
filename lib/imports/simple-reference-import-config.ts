@@ -56,53 +56,53 @@ export const simpleReferenceImportConfigs: Record<
       "Import object reference data with a lightweight preview, edit, exclude, and commit workflow.",
     emptyText: "No objects have been committed yet.",
     fields: [
-      requiredField("objectCode", "object_code", "Object Code Column", "Object Code"),
-      requiredField("objectName", "object_name", "Object Name Column", "Object Name"),
-      optionalField("accountType", "account_type", "Account Type Column", "Account Type"),
+      requiredField("objectCode", "object_code", "Object Code", "Object Code"),
+      requiredField("objectName", "object_name", "Object Name", "Object Name"),
+      optionalField("accountType", "account_type", "Account Type", "Account Type"),
       optionalField(
         "statementCategory",
         "statement_category",
-        "Statement Category Column",
+        "Statement Category",
         "Statement Category"
       ),
       optionalField(
         "balanceSheetCategory",
         "balance_sheet_category",
-        "Balance Sheet Category Column",
+        "Balance Sheet Category",
         "Balance Sheet Category"
       ),
       optionalField(
         "cashFlowCategory",
         "cash_flow_category",
-        "Cash Flow Category Column",
+        "Cash Flow Category",
         "Cash Flow Category"
       ),
       optionalField(
         "detailedAccountType",
         "detailed_account_type",
-        "Detailed Account Type Column",
+        "Detailed Account Type",
         "Detailed Account Type"
       ),
       optionalField(
         "accountTypeDetailed",
         "account_type_detailed",
-        "Account Type Detailed Column",
+        "Account Type Detailed",
         "Account Type Detailed"
       ),
       optionalField(
         "effectiveStartDate",
         "effective_start_date",
-        "Effective Start Date Column",
+        "Effective Start Date",
         "Effective Start Date"
       ),
       optionalField(
         "effectiveEndDate",
         "effective_end_date",
-        "Effective End Date Column",
+        "Effective End Date",
         "Effective End Date"
       ),
-      optionalField("activeStatus", "active_status", "Active Status Column", "Active Status"),
-      optionalField("changeReason", "change_reason", "Change Reason Column", "Change Reason")
+      optionalField("activeStatus", "active_status", "Active Status", "Active Status"),
+      optionalField("changeReason", "change_reason", "Change Reason", "Change Reason")
     ],
     idField: "object_id",
     mappingScope: "object",
@@ -148,29 +148,29 @@ export const simpleReferenceImportConfigs: Record<
       "Import ACFR mappings with a lightweight preview, edit, exclude, and commit workflow.",
     emptyText: "No ACFR mappings have been committed yet.",
     fields: [
-      requiredField("acfrCode", "acfr_code", "ACFR Code Column", "ACFR Code"),
-      requiredField("acfrName", "acfr_name", "ACFR Name Column", "ACFR Name"),
-      optionalField("acfrCategory", "acfr_category", "ACFR Category Column", "ACFR Category"),
+      requiredField("acfrCode", "acfr_code", "ACFR Code", "ACFR Code"),
+      requiredField("acfrName", "acfr_name", "ACFR Name", "ACFR Name"),
+      optionalField("acfrCategory", "acfr_category", "ACFR Category", "ACFR Category"),
       optionalField(
         "acfrDescription",
         "acfr_description",
-        "ACFR Description Column",
+        "ACFR Description",
         "ACFR Description"
       ),
       optionalField(
         "effectiveStartDate",
         "effective_start_date",
-        "Effective Start Date Column",
+        "Effective Start Date",
         "Effective Start Date"
       ),
       optionalField(
         "effectiveEndDate",
         "effective_end_date",
-        "Effective End Date Column",
+        "Effective End Date",
         "Effective End Date"
       ),
-      optionalField("activeStatus", "active_status", "Active Status Column", "Active Status"),
-      optionalField("changeReason", "change_reason", "Change Reason Column", "Change Reason")
+      optionalField("activeStatus", "active_status", "Active Status", "Active Status"),
+      optionalField("changeReason", "change_reason", "Change Reason", "Change Reason")
     ],
     idField: "acfr_mapping_id",
     mappingScope: "acfr",
@@ -205,35 +205,35 @@ export const simpleReferenceImportConfigs: Record<
       requiredField(
         "departmentCode",
         "department_code",
-        "Department Code Column",
+        "Department Code",
         "Department Code"
       ),
       requiredField(
         "departmentName",
         "department_name",
-        "Department Name Column",
+        "Department Name",
         "Department Name"
       ),
       optionalField(
         "departmentGroup",
         "department_group",
-        "Department Group Column",
+        "Department Group",
         "Department Group"
       ),
       optionalField(
         "effectiveStartDate",
         "effective_start_date",
-        "Effective Start Date Column",
+        "Effective Start Date",
         "Effective Start Date"
       ),
       optionalField(
         "effectiveEndDate",
         "effective_end_date",
-        "Effective End Date Column",
+        "Effective End Date",
         "Effective End Date"
       ),
-      optionalField("activeStatus", "active_status", "Active Status Column", "Active Status"),
-      optionalField("changeReason", "change_reason", "Change Reason Column", "Change Reason")
+      optionalField("activeStatus", "active_status", "Active Status", "Active Status"),
+      optionalField("changeReason", "change_reason", "Change Reason", "Change Reason")
     ],
     idField: "department_id",
     mappingScope: "department",
@@ -264,29 +264,29 @@ export const simpleReferenceImportConfigs: Record<
       "Import function reference data with a lightweight preview, edit, exclude, and commit workflow.",
     emptyText: "No functions have been committed yet.",
     fields: [
-      requiredField("functionCode", "function_code", "Function Code Column", "Function Code"),
-      requiredField("functionName", "function_name", "Function Name Column", "Function Name"),
-      optionalField("functionGroup", "function_group", "Function Group Column", "Function Group"),
+      requiredField("functionCode", "function_code", "Function Code", "Function Code"),
+      requiredField("functionName", "function_name", "Function Name", "Function Name"),
+      optionalField("functionGroup", "function_group", "Function Group", "Function Group"),
       optionalField(
         "functionDescription",
         "function_description",
-        "Function Description Column",
+        "Function Description",
         "Function Description"
       ),
       optionalField(
         "effectiveStartDate",
         "effective_start_date",
-        "Effective Start Date Column",
+        "Effective Start Date",
         "Effective Start Date"
       ),
       optionalField(
         "effectiveEndDate",
         "effective_end_date",
-        "Effective End Date Column",
+        "Effective End Date",
         "Effective End Date"
       ),
-      optionalField("activeStatus", "active_status", "Active Status Column", "Active Status"),
-      optionalField("changeReason", "change_reason", "Change Reason Column", "Change Reason")
+      optionalField("activeStatus", "active_status", "Active Status", "Active Status"),
+      optionalField("changeReason", "change_reason", "Change Reason", "Change Reason")
     ],
     idField: "function_id",
     mappingScope: "function",

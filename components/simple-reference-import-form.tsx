@@ -77,14 +77,14 @@ export function SimpleReferenceImportForm({
               Import {config.tableTitle}
             </h2>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              For column fields, enter the column header name or spreadsheet
-              column letter, such as A, B, C.
+              For mapping fields, enter the column header name, spreadsheet
+              column letter, or column number.
             </p>
           </div>
 
           <section>
             <h3 className="text-sm font-semibold text-foreground">Import Mapping</h3>
-            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-3 max-w-xs">
               <TextInput
                 defaultValue="1"
                 helperText="Enter the row number that contains column headers."
@@ -93,6 +93,8 @@ export function SimpleReferenceImportForm({
                 required
                 type="number"
               />
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {config.fields.map((field) => (
                 <TextInput
                   defaultValue={field.defaultColumn}
@@ -108,6 +110,8 @@ export function SimpleReferenceImportForm({
                 name="sheetReference"
                 placeholder="Sheet1 or 1"
               />
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               <CheckboxInput
                 helperText="Imported nonblank values overwrite saved values."
                 label={`Update existing ${config.pluralLabel}`}
@@ -368,7 +372,7 @@ function TextInput({
   type?: string;
 }) {
   return (
-    <label className="text-xs font-semibold uppercase text-muted-foreground">
+    <label className="block text-xs font-semibold uppercase text-muted-foreground">
       {label}
       <input
         className={fieldClass}

@@ -41,11 +41,10 @@ const targetFieldsByImportType: Record<
   ],
   object_mapping: [
     required("object_code", "Object code"),
-    required("account_name", "Account name"),
+    required("object_name", "Object name"),
     optional("account_type", "Account type"),
-    optional("balance_sheet_category", "Balance sheet category"),
-    optional("cash_flow_category", "Cash flow category"),
-    optional("account_type_detailed", "Account type detailed"),
+    optional("balance_sheet_line", "Balance sheet line"),
+    optional("activity_statement_line", "Activity statement line"),
     optional("active_status", "Active status"),
     optional("effective_start_date", "Effective start date"),
     optional("effective_end_date", "Effective end date")

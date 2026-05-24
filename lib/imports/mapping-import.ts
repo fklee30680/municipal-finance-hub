@@ -56,14 +56,13 @@ const mappingConfigs: Record<SupportedMappingImportType, MappingConfig> = {
   object_mapping: {
     codeField: "object_code",
     mappingScope: "object",
-    nameField: "account_name",
+    nameField: "object_name",
     tableFields: {
-      account_name: "object_name",
+      object_name: "object_name",
       account_type: "account_type",
-      account_type_detailed: "account_type_detailed",
       active_status: "active_status",
-      balance_sheet_category: "balance_sheet_category",
-      cash_flow_category: "cash_flow_category",
+      activity_statement_line: "activity_statement_line",
+      balance_sheet_line: "balance_sheet_line",
       effective_end_date: "effective_end_date",
       effective_start_date: "effective_start_date",
       object_code: "object_code"

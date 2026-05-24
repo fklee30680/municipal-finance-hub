@@ -74,34 +74,16 @@ export const simpleReferenceImportConfigs: Record<
       requiredField("objectName", "object_name", "Object Name", "Object Name"),
       optionalField("accountType", "account_type", "Account Type", "Account Type"),
       optionalField(
-        "statementCategory",
-        "statement_category",
-        "Statement Category",
-        "Statement Category"
+        "balanceSheetLine",
+        "balance_sheet_line",
+        "Balance Sheet Line",
+        "Balance Sheet Line"
       ),
       optionalField(
-        "balanceSheetCategory",
-        "balance_sheet_category",
-        "Balance Sheet Category",
-        "Balance Sheet Category"
-      ),
-      optionalField(
-        "cashFlowCategory",
-        "cash_flow_category",
-        "Cash Flow Category",
-        "Cash Flow Category"
-      ),
-      optionalField(
-        "detailedAccountType",
-        "detailed_account_type",
-        "Detailed Account Type",
-        "Detailed Account Type"
-      ),
-      optionalField(
-        "accountTypeDetailed",
-        "account_type_detailed",
-        "Account Type Detailed",
-        "Account Type Detailed"
+        "activityStatementLine",
+        "activity_statement_line",
+        "Activity Statement Line",
+        "Activity Statement Line"
       ),
       optionalField(
         "effectiveStartDate",
@@ -124,74 +106,20 @@ export const simpleReferenceImportConfigs: Record<
       "Object code and object name remain controlled by the import workflow. Manual edits here update classification, status, and effective-date fields only.",
     manualEditableFields: [
       editableSelect("accountType", "account_type", "Account Type", [
-        { label: "Assets", value: "assets" },
-        { label: "Liabilities", value: "liabilities" },
-        { label: "Deferred Outflows", value: "deferred_outflows" },
-        { label: "Deferred Inflows", value: "deferred_inflows" },
-        { label: "Fund Balance", value: "fund_balance" },
-        { label: "Net Position", value: "net_position" },
-        { label: "Revenues", value: "revenues" },
-        { label: "Expenditures", value: "expenditures" },
-        { label: "Expenses", value: "expenses" },
-        { label: "Other Financing Sources", value: "other_financing_sources" },
-        { label: "Other Financing Uses", value: "other_financing_uses" }
+        ...balanceSheetAccountTypeOptions(),
+        ...activityStatementAccountTypeOptions()
       ]),
       editableSelect(
-        "statementCategory",
-        "statement_category",
-        "Statement Category",
-        [
-          { label: "Revenues", value: "revenues" },
-          { label: "Expenditures", value: "expenditures" },
-          { label: "Expenses", value: "expenses" },
-          { label: "Other Financing Sources", value: "other_financing_sources" },
-          { label: "Other Financing Uses", value: "other_financing_uses" },
-          { label: "Assets", value: "assets" },
-          { label: "Liabilities", value: "liabilities" },
-          { label: "Fund Balance", value: "fund_balance" },
-          { label: "Net Position", value: "net_position" },
-          { label: "Cash and Investments", value: "cash_and_investments" },
-          { label: "Current Assets", value: "current_assets" },
-          { label: "Current Liabilities", value: "current_liabilities" },
-          { label: "Working Capital", value: "working_capital" }
-        ]
+        "balanceSheetLine",
+        "balance_sheet_line",
+        "Balance Sheet Line",
+        balanceSheetLineOptions()
       ),
       editableSelect(
-        "balanceSheetCategory",
-        "balance_sheet_category",
-        "Balance Sheet Category",
-        [
-          { label: "Assets", value: "assets" },
-          { label: "Current Assets", value: "current_assets" },
-          { label: "Cash and Investments", value: "cash_and_investments" },
-          { label: "Liabilities", value: "liabilities" },
-          { label: "Current Liabilities", value: "current_liabilities" },
-          { label: "Deferred Outflows", value: "deferred_outflows" },
-          { label: "Deferred Inflows", value: "deferred_inflows" },
-          { label: "Fund Balance", value: "fund_balance" },
-          { label: "Net Position", value: "net_position" },
-          { label: "Working Capital", value: "working_capital" }
-        ]
-      ),
-      editableSelect("cashFlowCategory", "cash_flow_category", "Cash Flow Category", [
-        { label: "Cash and Investments", value: "cash_and_investments" },
-        { label: "Operating Activities", value: "operating_activities" },
-        { label: "Noncapital Financing Activities", value: "noncapital_financing_activities" },
-        { label: "Capital and Related Financing Activities", value: "capital_and_related_financing_activities" },
-        { label: "Investing Activities", value: "investing_activities" },
-        { label: "Not Cash Flow Related", value: "not_cash_flow_related" }
-      ]),
-      editableSelect(
-        "detailedAccountType",
-        "detailed_account_type",
-        "Detailed Account Type",
-        detailedAccountTypeOptions()
-      ),
-      editableSelect(
-        "accountTypeDetailed",
-        "account_type_detailed",
-        "Account Type Detailed",
-        detailedAccountTypeOptions()
+        "activityStatementLine",
+        "activity_statement_line",
+        "Activity Statement Line",
+        activityStatementLineOptions()
       ),
       activeStatusField(),
       editableDate("effectiveStartDate", "effective_start_date", "Effective Start"),
@@ -203,27 +131,21 @@ export const simpleReferenceImportConfigs: Record<
     pluralLabel: "objects",
     route: "objects",
     searchPlaceholder:
-      "Search object code, name, account type, statement category, or reporting category",
+      "Search object code, name, account type, balance sheet line, or activity statement line",
     searchTitle: "Search Objects",
     searchableFields: [
       "object_code",
       "object_name",
       "account_type",
-      "statement_category",
-      "balance_sheet_category",
-      "cash_flow_category",
-      "detailed_account_type",
-      "account_type_detailed"
+      "balance_sheet_line",
+      "activity_statement_line"
     ],
     tableColumns: [
       { dbField: "object_code", label: "Object Code" },
       { dbField: "object_name", label: "Object Name" },
       { dbField: "account_type", label: "Account Type" },
-      { dbField: "statement_category", label: "Statement Category" },
-      { dbField: "balance_sheet_category", label: "Balance Sheet Category" },
-      { dbField: "cash_flow_category", label: "Cash Flow Category" },
-      { dbField: "detailed_account_type", label: "Detailed Account Type" },
-      { dbField: "account_type_detailed", label: "Account Type Detailed" },
+      { dbField: "balance_sheet_line", label: "Balance Sheet Line" },
+      { dbField: "activity_statement_line", label: "Activity Statement Line" },
       { dbField: "active_status", label: "Active Status" },
       { dbField: "effective_start_date", label: "Effective Start" },
       { dbField: "effective_end_date", label: "Effective End" },
@@ -543,25 +465,53 @@ function editableTextarea(
   };
 }
 
-function detailedAccountTypeOptions() {
+function balanceSheetAccountTypeOptions() {
+  return [
+    { label: "Assets", value: "assets" },
+    { label: "Liabilities", value: "liabilities" },
+    { label: "Deferred Outflows", value: "deferred_outflows" },
+    { label: "Deferred Inflows", value: "deferred_inflows" },
+    { label: "Fund Balance", value: "fund_balance" },
+    { label: "Net Position", value: "net_position" }
+  ];
+}
+
+function activityStatementAccountTypeOptions() {
+  return [
+    { label: "Revenues", value: "revenues" },
+    { label: "Expenditures", value: "expenditures" },
+    { label: "Expenses", value: "expenses" },
+    { label: "Other Financing Sources", value: "other_financing_sources" },
+    { label: "Other Financing Uses", value: "other_financing_uses" },
+    { label: "Transfers In", value: "transfers_in" },
+    { label: "Transfers Out", value: "transfers_out" }
+  ];
+}
+
+function balanceSheetLineOptions() {
   return [
     { label: "Cash and Investments", value: "cash_and_investments" },
     { label: "Current Assets", value: "current_assets" },
     { label: "Capital Assets", value: "capital_assets" },
     { label: "Other Assets", value: "other_assets" },
+    { label: "Deferred Outflows", value: "deferred_outflows" },
     { label: "Current Liabilities", value: "current_liabilities" },
     { label: "Long-Term Liabilities", value: "long_term_liabilities" },
     { label: "Other Liabilities", value: "other_liabilities" },
+    { label: "Deferred Inflows", value: "deferred_inflows" },
     { label: "Fund Balance", value: "fund_balance" },
-    { label: "Net Position", value: "net_position" },
-    { label: "Operating Revenues", value: "operating_revenues" },
-    { label: "Nonoperating Revenues", value: "nonoperating_revenues" },
+    { label: "Net Position", value: "net_position" }
+  ];
+}
+
+function activityStatementLineOptions() {
+  return [
     { label: "Revenues", value: "revenues" },
     { label: "Expenditures", value: "expenditures" },
-    { label: "Operating Expenses", value: "operating_expenses" },
-    { label: "Nonoperating Expenses", value: "nonoperating_expenses" },
     { label: "Expenses", value: "expenses" },
     { label: "Other Financing Sources", value: "other_financing_sources" },
-    { label: "Other Financing Uses", value: "other_financing_uses" }
+    { label: "Other Financing Uses", value: "other_financing_uses" },
+    { label: "Transfers In", value: "transfers_in" },
+    { label: "Transfers Out", value: "transfers_out" }
   ];
 }

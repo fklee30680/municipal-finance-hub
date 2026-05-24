@@ -53,18 +53,15 @@ type ActiveTrialBalanceLine = {
 type ReferenceRow = Record<string, boolean | string | number | null>;
 
 type EnrichedLine = ActiveTrialBalanceLine & {
+  activity_statement_line: string | null;
   account_type: string | null;
-  balance_sheet_category: string | null;
-  cash_flow_category: string | null;
-  detailed_account_type: string | null;
-  account_type_detailed: string | null;
+  balance_sheet_line: string | null;
   fund_type: string | null;
   include_in_cash_reconciliation: boolean;
   include_in_standard_reporting: boolean;
   reporting_model: string | null;
   reporting_treatment: string;
   reporting_exclusion_reason: string | null;
-  statement_category: string | null;
 };
 
 type CoverageIssue = {
@@ -540,11 +537,14 @@ function enrichLines(
     const object = references.objects.get(text(line.object_code));
     return {
       ...line,
+      // Legacy fallback keeps calculations working while existing object rows are backfilled.
+      activity_statement_line: textOrNull(
+        object?.activity_statement_line ?? object?.statement_category
+      ),
       account_type: textOrNull(object?.account_type),
-      account_type_detailed: textOrNull(object?.account_type_detailed),
-      balance_sheet_category: textOrNull(object?.balance_sheet_category),
-      cash_flow_category: textOrNull(object?.cash_flow_category),
-      detailed_account_type: textOrNull(object?.detailed_account_type),
+      balance_sheet_line: textOrNull(
+        object?.balance_sheet_line ?? object?.balance_sheet_category
+      ),
       fund_type: textOrNull(fund?.fund_type),
       include_in_cash_reconciliation:
         booleanValue(fund?.include_in_cash_reconciliation, false),
@@ -552,8 +552,7 @@ function enrichLines(
         booleanValue(fund?.include_in_standard_reporting, true),
       reporting_model: textOrNull(fund?.reporting_model),
       reporting_exclusion_reason: textOrNull(fund?.reporting_exclusion_reason),
-      reporting_treatment: text(fund?.reporting_treatment) || "reportable",
-      statement_category: textOrNull(object?.statement_category)
+      reporting_treatment: text(fund?.reporting_treatment) || "reportable"
     };
   });
 }
@@ -626,25 +625,7 @@ function buildMappingCoverageIssues({
       nameField: "object_name",
       referenceTable: "objects",
       requiredFields: [
-        ["account_type", "missing_object_account_type", "Object exists but is missing account type.", "High"],
-        [
-          "statement_category",
-          "missing_object_statement_category",
-          "Object exists but is missing statement category.",
-          "High"
-        ],
-        [
-          "balance_sheet_category",
-          "missing_object_balance_sheet_category",
-          "Object exists but is missing balance sheet category.",
-          "High"
-        ],
-        [
-          "cash_flow_category",
-          "missing_object_cash_flow_category",
-          "Object exists but is missing cash flow category.",
-          "Warning"
-        ]
+        ["account_type", "missing_object_account_type", "Object exists but is missing account type.", "High"]
       ],
       rows: references.objects,
       segmentType: "object"
@@ -811,15 +792,21 @@ function buildMappingCoverageIssues({
       }
 
       if (dimension.segmentType === "object") {
-        const detailed = text(referenceRow.detailed_account_type);
-        const accountDetailed = text(referenceRow.account_type_detailed);
-        if (!detailed && !accountDetailed) {
+        const accountType = normalizeClassification(text(referenceRow.account_type));
+        const balanceSheetLine = text(
+          referenceRow.balance_sheet_line ?? referenceRow.balance_sheet_category
+        );
+        const activityStatementLine = text(
+          referenceRow.activity_statement_line ?? referenceRow.statement_category
+        );
+
+        if (isBalanceSheetAccountType(accountType) && !balanceSheetLine) {
           issues.push({
             affectedAmount,
             affectedRowCount: groupedLines.length,
-            coverageIssueType: "missing_object_detailed_account_type",
-            message: `Object code ${code} is missing account type detailed and detailed account type.`,
-            recommendedAction: "Populate account_type_detailed or detailed_account_type on the object mapping.",
+            coverageIssueType: "missing_object_balance_sheet_line",
+            message: `Object code ${code} is missing balance sheet line for a balance-sheet account type.`,
+            recommendedAction: "Populate balance_sheet_line on the object mapping.",
             referenceStatus: "incomplete",
             referenceTable: dimension.referenceTable,
             segmentCode: code,
@@ -827,14 +814,16 @@ function buildMappingCoverageIssues({
             segmentType: "object",
             severity: "High"
           });
-        } else if (detailed && accountDetailed && detailed !== accountDetailed) {
+        }
+
+        if (isActivityStatementAccountType(accountType) && !activityStatementLine) {
           issues.push({
             affectedAmount,
             affectedRowCount: groupedLines.length,
-            coverageIssueType: "conflicting_object_detailed_account_type",
-            message: `Object code ${code} has conflicting account_type_detailed and detailed_account_type values.`,
-            recommendedAction: "Choose the correct detailed object classification; account_type_detailed is used first.",
-            referenceStatus: "conflict",
+            coverageIssueType: "missing_object_activity_statement_line",
+            message: `Object code ${code} is missing activity statement line for an activity-statement account type.`,
+            recommendedAction: "Populate activity_statement_line on the object mapping.",
+            referenceStatus: "incomplete",
             referenceTable: dimension.referenceTable,
             segmentCode: code,
             segmentName: textOrNull(referenceRow[dimension.nameField]),
@@ -974,8 +963,8 @@ function buildFinancialSummaries({
     ["acfr", "acfr_code"],
     ["object", "object_code"],
     ["account_type", "account_type"],
-    ["balance_sheet_category", "balance_sheet_category"],
-    ["account_type_detailed", "account_type_detailed"],
+    ["balance_sheet_line", "balance_sheet_line"],
+    ["activity_statement_line", "activity_statement_line"],
     ["fund_type", "fund_type"],
     ["reporting_model", "reporting_model"]
   ] as const;
@@ -1042,17 +1031,16 @@ function buildFinancialSummaryRow({
 
   return {
     account_type: sample?.account_type ?? null,
-    account_type_detailed: sample?.account_type_detailed ?? null,
+    activity_statement_line: sample?.activity_statement_line ?? null,
     acfr_code: sample?.acfr_code ?? null,
     amount_type: amountType,
     amount_value: netChange,
-    balance_sheet_category: sample?.balance_sheet_category ?? null,
+    balance_sheet_line: sample?.balance_sheet_line ?? null,
     beginning_balance: sum(lines.map((line) => money(line.beginning_balance))),
     calculation_run_id: calculationRunId,
     credits: sum(lines.map((line) => money(line.credits))),
     debits: sum(lines.map((line) => money(line.debits))),
     department_code: sample?.department_code ?? null,
-    detailed_account_type: sample?.detailed_account_type ?? null,
     ending_balance: endingBalance,
     fiscal_year: request.fiscalYear,
     function_code: sample?.function_code ?? null,
@@ -1636,11 +1624,44 @@ function getMappingCoverageStatus(issues: CoverageIssue[]) {
   return "Complete With Warnings";
 }
 
+function isBalanceSheetAccountType(accountType: string) {
+  return new Set([
+    "asset",
+    "assets",
+    "liability",
+    "liabilities",
+    "deferred_outflow",
+    "deferred_outflows",
+    "deferred_inflow",
+    "deferred_inflows",
+    "fund_balance",
+    "net_position"
+  ]).has(accountType);
+}
+
+function isActivityStatementAccountType(accountType: string) {
+  return new Set([
+    "revenue",
+    "revenues",
+    "expenditure",
+    "expenditures",
+    "expense",
+    "expenses",
+    "other_financing_source",
+    "other_financing_sources",
+    "other_financing_use",
+    "other_financing_uses",
+    "transfer_in",
+    "transfers_in",
+    "transfer_out",
+    "transfers_out"
+  ]).has(accountType);
+}
+
 function getStatementCategory(line: EnrichedLine) {
   const category =
-    normalizeClassification(line.statement_category) ||
-    normalizeClassification(line.account_type_detailed) ||
-    normalizeClassification(line.detailed_account_type) ||
+    normalizeClassification(line.activity_statement_line) ||
+    normalizeClassification(line.balance_sheet_line) ||
     normalizeClassification(line.account_type);
 
   if (category.includes("cash")) return "cash_and_investments";
@@ -1666,12 +1687,7 @@ function getStatementType(reportingModel: string) {
 }
 
 function isCashLine(line: EnrichedLine) {
-  return [
-    line.balance_sheet_category,
-    line.account_type_detailed,
-    line.detailed_account_type,
-    line.cash_flow_category
-  ]
+  return [line.balance_sheet_line, line.account_type]
     .map(normalizeClassification)
     .some((value) => value.includes("cash"));
 }

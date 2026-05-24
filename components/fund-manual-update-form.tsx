@@ -36,6 +36,20 @@ const reportingModels = [
   ["other", "Other"]
 ] as const;
 
+const defaultFundGroups = [
+  "General Government",
+  "Special Revenue",
+  "Capital Projects",
+  "Debt Service",
+  "Permanent",
+  "Enterprise",
+  "Internal Service",
+  "Fiduciary",
+  "Component Unit",
+  "Grant Funds",
+  "Other"
+] as const;
+
 export function FundManualUpdateForm({
   fund,
   fundGroups
@@ -51,7 +65,7 @@ export function FundManualUpdateForm({
     updateFundManualAction,
     initialState
   );
-  const fundGroupListId = `fund-groups-${fund.fund_id}`;
+  const fundGroupOptions = buildFundGroupOptions(fund.fund_group, fundGroups);
 
   useEffect(() => {
     if (state.status === "success") {
@@ -124,17 +138,18 @@ export function FundManualUpdateForm({
 
             <label className="space-y-2 text-sm font-medium text-foreground">
               Fund Group
-              <Input
+              <select
+                className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 defaultValue={fund.fund_group ?? ""}
-                list={fundGroupListId}
                 name="fundGroup"
-                placeholder="Enter or choose a group"
-              />
-              <datalist id={fundGroupListId}>
-                {fundGroups.map((group) => (
-                  <option key={group} value={group} />
+              >
+                <option value="">Not set</option>
+                {fundGroupOptions.map((group) => (
+                  <option key={group} value={group}>
+                    {group}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </label>
 
             <label className="space-y-2 text-sm font-medium text-foreground">
@@ -214,6 +229,16 @@ export function FundManualUpdateForm({
       </dialog>
     </>
   );
+}
+
+function buildFundGroupOptions(currentValue: string | null, existingGroups: string[]) {
+  return Array.from(
+    new Set(
+      [...defaultFundGroups, currentValue, ...existingGroups]
+        .map((group) => group?.trim())
+        .filter((group): group is string => Boolean(group))
+    )
+  ).sort((a, b) => a.localeCompare(b));
 }
 
 function normalizeMajorFundFlag(value: string | null) {

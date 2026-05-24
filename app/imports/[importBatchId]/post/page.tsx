@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import {
@@ -189,6 +190,14 @@ export default async function PostTrialBalancePage({
     (!latestValidation.warning_count || latestValidation.warnings_acknowledged) &&
     !activeConflict &&
     !alreadyPosted;
+  const replacementReady =
+    importType?.import_type_code === "trial_balance" &&
+    Boolean(activeConflict) &&
+    !alreadyPosted &&
+    latestValidation?.status === "completed" &&
+    latestValidation.critical_error_count === 1 &&
+    latestValidation.eligible_to_post === false &&
+    (!latestValidation.warning_count || latestValidation.warnings_acknowledged);
   const blockingReason = getPostingBlockReason({
     activeConflict: Boolean(activeConflict),
     alreadyPosted,
@@ -321,10 +330,41 @@ export default async function PostTrialBalancePage({
                 exists for this fiscal year and period. Request replacement if
                 this import should supersede the existing active data.
               </p>
+              <div className="rounded-md border border-border bg-muted p-4">
+                <p className="text-sm font-semibold text-foreground">
+                  Replacement checklist
+                </p>
+                <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                  <ChecklistItem complete={Boolean(latestValidation)}>
+                    Validation has been run for this replacement import.
+                  </ChecklistItem>
+                  <ChecklistItem complete={latestValidation?.status === "completed"}>
+                    Latest validation run is complete.
+                  </ChecklistItem>
+                  <ChecklistItem complete={latestValidation?.critical_error_count === 1}>
+                    The only critical blocker is the expected period conflict.
+                  </ChecklistItem>
+                  <ChecklistItem
+                    complete={
+                      !latestValidation?.warning_count ||
+                      latestValidation.warnings_acknowledged
+                    }
+                  >
+                    Validation warnings are acknowledged, if any.
+                  </ChecklistItem>
+                </ul>
+              </div>
               <RequestReplacementAction
-                disabled={alreadyPosted || importType?.import_type_code !== "trial_balance"}
+                disabled={!replacementReady}
                 importBatchId={batch.import_batch_id}
               />
+              {!replacementReady ? (
+                <p className="text-sm text-muted-foreground">
+                  Complete validation first. Replacement requests should be
+                  created only when the validated replacement import is blocked
+                  solely by the existing active period data.
+                </p>
+              ) : null}
             </CardContent>
           </Card>
         ) : null}
@@ -461,6 +501,29 @@ function InfoItem({
       <p className="font-medium text-foreground">{label}</p>
       <p className="break-words text-muted-foreground">{value ?? "Not available"}</p>
     </div>
+  );
+}
+
+function ChecklistItem({
+  children,
+  complete
+}: {
+  children: ReactNode;
+  complete: boolean;
+}) {
+  return (
+    <li className="flex gap-2">
+      <span
+        className={
+          complete
+            ? "mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-500 text-xs font-semibold text-emerald-700"
+            : "mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold text-muted-foreground"
+        }
+      >
+        {complete ? "OK" : "-"}
+      </span>
+      <span>{children}</span>
+    </li>
   );
 }
 

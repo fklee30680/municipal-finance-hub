@@ -427,7 +427,26 @@ export async function requestReplacement({
   reason: string;
   userId: string;
 }) {
-  const batch = await loadImportBatch({ adminClient, importBatchId, organizationId });
+  const { batch, criticalExceptions, validationRun } = await loadPostingContext({
+    adminClient,
+    importBatchId,
+    organizationId
+  });
+
+  validatePostingEligibility({
+    criticalExceptions,
+    postingMode: "replacement",
+    validationRun
+  });
+
+  const hasPeriodConflict = criticalExceptions.some(
+    (exception) => exception.exception_code === "period_conflict_active_data_exists"
+  );
+
+  if (!hasPeriodConflict) {
+    throw new Error("Replacement requests require a validated period conflict.");
+  }
+
   const activeConflict = await findActivePeriodImport({
     adminClient,
     excludeImportBatchId: importBatchId,

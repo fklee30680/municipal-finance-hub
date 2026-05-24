@@ -244,6 +244,10 @@ export default async function ImportReviewPage({
     !["archived", "posted", "posted_with_exceptions", "superseded"].includes(
       batch.batch_status
     );
+  const canStartReplacement =
+    importType?.import_type_code === "trial_balance" &&
+    batch.is_active_for_reporting &&
+    ["posted", "posted_with_exceptions"].includes(batch.batch_status);
 
   return (
     <AppShell>
@@ -331,6 +335,41 @@ export default async function ImportReviewPage({
             </p>
           </CardContent>
         </Card>
+
+        {canStartReplacement ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Replace this posted period</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                To replace this active posted trial balance, upload the corrected
+                file for the same fiscal year and period. After preview and
+                validation, the Post / Replace page on the new import will show
+                the replacement request workflow.
+              </p>
+              <div className="grid gap-3 text-sm md:grid-cols-3">
+                <InfoItem label="Fiscal year" value={batch.fiscal_year} />
+                <InfoItem label="Period" value={batch.period} />
+                <InfoItem label="Current active rows" value={batch.rows_processed} />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                  href="/imports/new"
+                >
+                  Upload Replacement File
+                </Link>
+                <Link
+                  className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                  href="/imports/replacement-requests"
+                >
+                  View Replacement Requests
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader>

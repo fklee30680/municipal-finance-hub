@@ -88,7 +88,9 @@ export default async function ReplacementRequestsPage() {
             ) : null}
             {requests.map((request) => {
               const status = request.approval_status ?? request.request_status;
-              const pending = ["requested", "approved"].includes(status);
+              const pending = status === "requested";
+              const approved = status === "approved";
+              const rejected = status === "rejected";
               return (
                 <div
                   className="space-y-4 rounded-md border border-border p-4"
@@ -142,6 +144,18 @@ export default async function ReplacementRequestsPage() {
                     <ReplacementRequestDecisionActions
                       replacementRequestId={request.inactivation_request_id}
                     />
+                  ) : null}
+                  {approved ? (
+                    <p className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
+                      Replacement approved. The replacement import has been
+                      posted and the prior active import was superseded.
+                    </p>
+                  ) : null}
+                  {rejected ? (
+                    <p className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
+                      Replacement rejected. No posting or supersession was
+                      performed for this request.
+                    </p>
                   ) : null}
                 </div>
               );

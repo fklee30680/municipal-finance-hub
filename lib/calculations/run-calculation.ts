@@ -110,12 +110,6 @@ export async function runAnalysisCalculation({
     organizationId: request.organizationId
   });
 
-  await markComparableRunsSuperseded({
-    adminClient,
-    calculationRunId,
-    request
-  });
-
   const runningRun = await adminClient.from("calculation_runs").insert({
     account_structure_id: null,
     calculation_run_id: calculationRunId,
@@ -219,6 +213,12 @@ export async function runAnalysisCalculation({
     if (updateResult.error) {
       throw new Error(updateResult.error.message);
     }
+
+    await markComparableRunsSuperseded({
+      adminClient,
+      calculationRunId,
+      request
+    });
 
     await writeAuditLog({
       actionType:
@@ -1552,6 +1552,7 @@ async function markComparableRunsSuperseded({
     .eq("period_from", request.periodFrom)
     .eq("period_to", request.periodTo)
     .eq("time_view", request.timeView)
+    .neq("calculation_run_id", calculationRunId)
     .eq("is_current", true)
     .in("run_status", ["completed", "completed_with_warnings", "stale"]);
 

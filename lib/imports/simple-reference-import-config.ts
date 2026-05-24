@@ -123,23 +123,75 @@ export const simpleReferenceImportConfigs: Record<
     manualEditHelpText:
       "Object code and object name remain controlled by the import workflow. Manual edits here update classification, status, and effective-date fields only.",
     manualEditableFields: [
-      editableText("accountType", "account_type", "Account Type"),
-      editableText("statementCategory", "statement_category", "Statement Category"),
-      editableText(
+      editableSelect("accountType", "account_type", "Account Type", [
+        { label: "Assets", value: "assets" },
+        { label: "Liabilities", value: "liabilities" },
+        { label: "Deferred Outflows", value: "deferred_outflows" },
+        { label: "Deferred Inflows", value: "deferred_inflows" },
+        { label: "Fund Balance", value: "fund_balance" },
+        { label: "Net Position", value: "net_position" },
+        { label: "Revenues", value: "revenues" },
+        { label: "Expenditures", value: "expenditures" },
+        { label: "Expenses", value: "expenses" },
+        { label: "Other Financing Sources", value: "other_financing_sources" },
+        { label: "Other Financing Uses", value: "other_financing_uses" }
+      ]),
+      editableSelect(
+        "statementCategory",
+        "statement_category",
+        "Statement Category",
+        [
+          { label: "Revenues", value: "revenues" },
+          { label: "Expenditures", value: "expenditures" },
+          { label: "Expenses", value: "expenses" },
+          { label: "Other Financing Sources", value: "other_financing_sources" },
+          { label: "Other Financing Uses", value: "other_financing_uses" },
+          { label: "Assets", value: "assets" },
+          { label: "Liabilities", value: "liabilities" },
+          { label: "Fund Balance", value: "fund_balance" },
+          { label: "Net Position", value: "net_position" },
+          { label: "Cash and Investments", value: "cash_and_investments" },
+          { label: "Current Assets", value: "current_assets" },
+          { label: "Current Liabilities", value: "current_liabilities" },
+          { label: "Working Capital", value: "working_capital" }
+        ]
+      ),
+      editableSelect(
         "balanceSheetCategory",
         "balance_sheet_category",
-        "Balance Sheet Category"
+        "Balance Sheet Category",
+        [
+          { label: "Assets", value: "assets" },
+          { label: "Current Assets", value: "current_assets" },
+          { label: "Cash and Investments", value: "cash_and_investments" },
+          { label: "Liabilities", value: "liabilities" },
+          { label: "Current Liabilities", value: "current_liabilities" },
+          { label: "Deferred Outflows", value: "deferred_outflows" },
+          { label: "Deferred Inflows", value: "deferred_inflows" },
+          { label: "Fund Balance", value: "fund_balance" },
+          { label: "Net Position", value: "net_position" },
+          { label: "Working Capital", value: "working_capital" }
+        ]
       ),
-      editableText("cashFlowCategory", "cash_flow_category", "Cash Flow Category"),
-      editableText(
+      editableSelect("cashFlowCategory", "cash_flow_category", "Cash Flow Category", [
+        { label: "Cash and Investments", value: "cash_and_investments" },
+        { label: "Operating Activities", value: "operating_activities" },
+        { label: "Noncapital Financing Activities", value: "noncapital_financing_activities" },
+        { label: "Capital and Related Financing Activities", value: "capital_and_related_financing_activities" },
+        { label: "Investing Activities", value: "investing_activities" },
+        { label: "Not Cash Flow Related", value: "not_cash_flow_related" }
+      ]),
+      editableSelect(
         "detailedAccountType",
         "detailed_account_type",
-        "Detailed Account Type"
+        "Detailed Account Type",
+        detailedAccountTypeOptions()
       ),
-      editableText(
+      editableSelect(
         "accountTypeDetailed",
         "account_type_detailed",
-        "Account Type Detailed"
+        "Account Type Detailed",
+        detailedAccountTypeOptions()
       ),
       activeStatusField(),
       editableDate("effectiveStartDate", "effective_start_date", "Effective Start"),
@@ -463,6 +515,21 @@ function editableText(
   };
 }
 
+function editableSelect(
+  formKey: string,
+  dbField: string,
+  label: string,
+  options: Array<{ label: string; value: string }>
+): SimpleReferenceEditableField {
+  return {
+    dbField,
+    formKey,
+    inputType: "select",
+    label,
+    options: [{ label: "Not set", value: "" }, ...options]
+  };
+}
+
 function editableTextarea(
   formKey: string,
   dbField: string,
@@ -474,4 +541,27 @@ function editableTextarea(
     inputType: "textarea",
     label
   };
+}
+
+function detailedAccountTypeOptions() {
+  return [
+    { label: "Cash and Investments", value: "cash_and_investments" },
+    { label: "Current Assets", value: "current_assets" },
+    { label: "Capital Assets", value: "capital_assets" },
+    { label: "Other Assets", value: "other_assets" },
+    { label: "Current Liabilities", value: "current_liabilities" },
+    { label: "Long-Term Liabilities", value: "long_term_liabilities" },
+    { label: "Other Liabilities", value: "other_liabilities" },
+    { label: "Fund Balance", value: "fund_balance" },
+    { label: "Net Position", value: "net_position" },
+    { label: "Operating Revenues", value: "operating_revenues" },
+    { label: "Nonoperating Revenues", value: "nonoperating_revenues" },
+    { label: "Revenues", value: "revenues" },
+    { label: "Expenditures", value: "expenditures" },
+    { label: "Operating Expenses", value: "operating_expenses" },
+    { label: "Nonoperating Expenses", value: "nonoperating_expenses" },
+    { label: "Expenses", value: "expenses" },
+    { label: "Other Financing Sources", value: "other_financing_sources" },
+    { label: "Other Financing Uses", value: "other_financing_uses" }
+  ];
 }

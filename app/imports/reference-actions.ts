@@ -139,6 +139,7 @@ export async function updateSimpleReferenceManualAction(
     }
 
     const updatePayload = buildManualUpdatePayload({
+      beforeRow: beforeResult.data,
       fields: config.manualEditableFields,
       formData,
       userId: appUser.user_id
@@ -262,10 +263,12 @@ function getStringValue(value: FormDataEntryValue | null) {
 }
 
 function buildManualUpdatePayload({
+  beforeRow,
   fields,
   formData,
   userId
 }: {
+  beforeRow: Record<string, unknown>;
   fields: SimpleReferenceEditableField[];
   formData: FormData;
   userId: string;
@@ -280,8 +283,15 @@ function buildManualUpdatePayload({
     const value = getStringValue(formData.get(field.formKey));
 
     if (field.inputType === "select") {
-      const allowedValues = field.options?.map((option) => option.value) ?? [];
-      if (!allowedValues.includes(value)) {
+      const existingValue =
+        beforeRow[field.dbField] === null || beforeRow[field.dbField] === undefined
+          ? ""
+          : String(beforeRow[field.dbField]);
+      const allowedValues = new Set([
+        ...(field.options?.map((option) => option.value) ?? []),
+        existingValue
+      ]);
+      if (!allowedValues.has(value)) {
         throw new Error(`${field.label} is not valid.`);
       }
 

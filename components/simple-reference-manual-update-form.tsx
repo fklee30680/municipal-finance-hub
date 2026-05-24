@@ -153,6 +153,11 @@ function EditableField({
     "flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
   if (field.inputType === "select") {
+    const options = getSelectOptions({
+      currentValue: stringValue,
+      options: field.options ?? []
+    });
+
     return (
       <label className="space-y-2 text-sm font-medium text-foreground">
         {field.label}
@@ -162,7 +167,7 @@ function EditableField({
           name={field.formKey}
           ref={inputRef as Ref<HTMLSelectElement>}
         >
-          {field.options?.map((option) => (
+          {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
@@ -197,4 +202,24 @@ function EditableField({
       />
     </label>
   );
+}
+
+function getSelectOptions({
+  currentValue,
+  options
+}: {
+  currentValue: string;
+  options: Array<{ label: string; value: string }>;
+}) {
+  if (!currentValue || options.some((option) => option.value === currentValue)) {
+    return options;
+  }
+
+  return [
+    {
+      label: `Current: ${currentValue}`,
+      value: currentValue
+    },
+    ...options
+  ];
 }

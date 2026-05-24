@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { FundImportForm } from "@/components/fund-import-form";
@@ -134,106 +135,123 @@ export default async function FundImportPage({
                 </p>
               ) : null}
               {funds.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1580px] border-collapse text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-muted-foreground">
-                        <th className="py-3 pr-4 font-medium">Fund Code</th>
-                        <th className="py-3 pr-4 font-medium">Fund Name</th>
-                        <th className="py-3 pr-4 font-medium">Fund Type</th>
-                        <th className="py-3 pr-4 font-medium">Reporting Model</th>
-                        <th className="py-3 pr-4 font-medium">Fund Group</th>
-                        <th className="py-3 pr-4 font-medium">Major Fund</th>
-                        <th className="py-3 pr-4 font-medium">
-                          Reporting Treatment
-                        </th>
-                        <th className="py-3 pr-4 font-medium">
-                          Standard Reporting
-                        </th>
-                        <th className="py-3 pr-4 font-medium">
-                          Cash Reconciliation
-                        </th>
-                        <th className="py-3 pr-4 font-medium">
-                          Exclusion Reason
-                        </th>
-                        <th className="py-3 pr-4 font-medium">Active Status</th>
-                        <th className="py-3 pr-4 font-medium">Effective Start</th>
-                        <th className="py-3 pr-4 font-medium">Effective End</th>
-                        <th className="py-3 pr-4 font-medium">Last Updated</th>
-                        <th className="py-3 font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {funds.map((fund) => (
-                        <tr
-                          className={
-                            fund.active_status === "inactive"
-                              ? "border-b border-border align-top opacity-75"
-                              : "border-b border-border align-top"
-                          }
-                          key={fund.fund_id}
-                        >
-                          <td className="py-3 pr-4 font-mono text-xs font-medium text-foreground">
-                            {fund.fund_code}
-                          </td>
-                          <td className="py-3 pr-4 font-medium text-foreground">
+                <div className="divide-y divide-border rounded-md border border-border">
+                  <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)_auto] gap-4 bg-muted/50 px-4 py-3 text-xs font-semibold uppercase text-muted-foreground lg:grid">
+                    <span>Fund</span>
+                    <span>Classification</span>
+                    <span>Reporting Treatment</span>
+                    <span>Status / Dates</span>
+                    <span className="text-right">Action</span>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {funds.map((fund) => (
+                      <article
+                        className={
+                          fund.active_status === "inactive"
+                            ? "grid gap-4 px-4 py-4 opacity-75 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)_auto]"
+                            : "grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)_auto]"
+                        }
+                        key={fund.fund_id}
+                      >
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-xs font-semibold text-foreground">
+                              {fund.fund_code}
+                            </span>
+                            <StatusPill
+                              tone={
+                                fund.active_status === "inactive"
+                                  ? "muted"
+                                  : "default"
+                              }
+                              value={titleize(fund.active_status)}
+                            />
+                          </div>
+                          <p className="break-words text-sm font-semibold text-foreground">
                             {fund.fund_name}
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {fund.fund_type ?? "Not set"}
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            <StatusPill value={formatReportingModel(fund.reporting_model)} />
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {fund.fund_group ?? "Not set"}
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {formatMajorFund(fund.major_fund_flag)}
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Type: {fund.fund_type ?? "Not set"}
+                          </p>
+                        </div>
+
+                        <div className="min-w-0 space-y-2 text-sm text-muted-foreground">
+                          <dl className="grid gap-1">
+                            <Detail label="Model">
+                              <StatusPill
+                                value={formatReportingModel(fund.reporting_model)}
+                              />
+                            </Detail>
+                            <Detail label="Group">
+                              {fund.fund_group ?? "Not set"}
+                            </Detail>
+                            <Detail label="Major">
+                              {formatMajorFund(fund.major_fund_flag)}
+                            </Detail>
+                          </dl>
+                        </div>
+
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap gap-2">
                             <StatusPill
                               value={formatReportingTreatment(
                                 fund.reporting_treatment
                               )}
                             />
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {fund.include_in_standard_reporting
-                              ? "Included"
-                              : "Excluded"}
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {fund.include_in_cash_reconciliation ? "Yes" : "No"}
-                          </td>
-                          <td className="max-w-52 py-3 pr-4 text-muted-foreground">
-                            {fund.reporting_exclusion_reason ?? "Not set"}
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
                             <StatusPill
-                              tone={fund.active_status === "inactive" ? "muted" : "default"}
-                              value={titleize(fund.active_status)}
+                              tone={
+                                fund.include_in_standard_reporting
+                                  ? "default"
+                                  : "muted"
+                              }
+                              value={
+                                fund.include_in_standard_reporting
+                                  ? "Standard: Included"
+                                  : "Standard: Excluded"
+                              }
                             />
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {fund.effective_start_date ?? "Open"}
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {fund.effective_end_date ?? "Open"}
-                          </td>
-                          <td className="py-3 text-muted-foreground">
-                            {fund.updated_at ? formatDate(fund.updated_at) : "Not set"}
-                          </td>
-                          <td className="py-3">
-                            <FundManualUpdateForm
-                              fund={fund}
-                              fundGroups={fundGroups}
+                            <StatusPill
+                              tone={
+                                fund.include_in_cash_reconciliation
+                                  ? "default"
+                                  : "muted"
+                              }
+                              value={
+                                fund.include_in_cash_reconciliation
+                                  ? "Cash: Yes"
+                                  : "Cash: No"
+                              }
                             />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </div>
+                          <p className="break-words text-xs leading-5 text-muted-foreground">
+                            {fund.reporting_exclusion_reason ??
+                              "No exclusion reason set."}
+                          </p>
+                        </div>
+
+                        <div className="min-w-0 space-y-2 text-sm text-muted-foreground">
+                          <dl className="grid gap-1">
+                            <Detail label="Effective">
+                              {fund.effective_start_date ?? "Open"} to{" "}
+                              {fund.effective_end_date ?? "Open"}
+                            </Detail>
+                            <Detail label="Updated">
+                              {fund.updated_at
+                                ? formatDate(fund.updated_at)
+                                : "Not set"}
+                            </Detail>
+                          </dl>
+                        </div>
+
+                        <div className="flex items-start justify-start lg:justify-end">
+                          <FundManualUpdateForm
+                            fund={fund}
+                            fundGroups={fundGroups}
+                          />
+                        </div>
+                      </article>
+                    ))}
+                  </div>
                 </div>
               ) : null}
             </CardContent>
@@ -304,6 +322,23 @@ function StatusPill({
     >
       {value}
     </span>
+  );
+}
+
+function Detail({
+  children,
+  label
+}: {
+  children: ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-2">
+      <dt className="text-xs font-medium uppercase text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="min-w-0 break-words text-sm text-foreground">{children}</dd>
+    </div>
   );
 }
 

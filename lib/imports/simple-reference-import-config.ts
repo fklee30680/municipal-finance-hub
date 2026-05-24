@@ -23,6 +23,18 @@ export type SimpleReferenceTableColumn = {
   label: string;
 };
 
+export type SimpleReferenceEditableField = {
+  dbField: string;
+  formKey: string;
+  inputType: "date" | "select" | "textarea" | "text";
+  label: string;
+  nullable?: boolean;
+  options?: Array<{
+    label: string;
+    value: string;
+  }>;
+};
+
 export type SimpleReferenceImportConfig = {
   auditPrefix: string;
   codeField: string;
@@ -32,6 +44,8 @@ export type SimpleReferenceImportConfig = {
   fields: SimpleReferenceFieldConfig[];
   idField: string;
   mappingScope: "acfr" | "department" | "function" | "object";
+  manualEditHelpText: string;
+  manualEditableFields: SimpleReferenceEditableField[];
   nameField: string;
   pageTitle: string;
   pluralLabel: string;
@@ -106,6 +120,32 @@ export const simpleReferenceImportConfigs: Record<
     ],
     idField: "object_id",
     mappingScope: "object",
+    manualEditHelpText:
+      "Object code and object name remain controlled by the import workflow. Manual edits here update classification, status, and effective-date fields only.",
+    manualEditableFields: [
+      editableText("accountType", "account_type", "Account Type"),
+      editableText("statementCategory", "statement_category", "Statement Category"),
+      editableText(
+        "balanceSheetCategory",
+        "balance_sheet_category",
+        "Balance Sheet Category"
+      ),
+      editableText("cashFlowCategory", "cash_flow_category", "Cash Flow Category"),
+      editableText(
+        "detailedAccountType",
+        "detailed_account_type",
+        "Detailed Account Type"
+      ),
+      editableText(
+        "accountTypeDetailed",
+        "account_type_detailed",
+        "Account Type Detailed"
+      ),
+      activeStatusField(),
+      editableDate("effectiveStartDate", "effective_start_date", "Effective Start"),
+      editableDate("effectiveEndDate", "effective_end_date", "Effective End"),
+      editableTextarea("changeReason", "change_reason", "Change Reason")
+    ],
     nameField: "object_name",
     pageTitle: "Object List Update",
     pluralLabel: "objects",
@@ -174,6 +214,16 @@ export const simpleReferenceImportConfigs: Record<
     ],
     idField: "acfr_mapping_id",
     mappingScope: "acfr",
+    manualEditHelpText:
+      "ACFR code and ACFR name remain controlled by the import workflow. Manual edits here update category, description, status, and effective-date fields only.",
+    manualEditableFields: [
+      editableText("acfrCategory", "acfr_category", "ACFR Category"),
+      editableTextarea("acfrDescription", "acfr_description", "ACFR Description"),
+      activeStatusField(),
+      editableDate("effectiveStartDate", "effective_start_date", "Effective Start"),
+      editableDate("effectiveEndDate", "effective_end_date", "Effective End"),
+      editableTextarea("changeReason", "change_reason", "Change Reason")
+    ],
     nameField: "acfr_name",
     pageTitle: "ACFR List Update",
     pluralLabel: "ACFR mappings",
@@ -237,6 +287,15 @@ export const simpleReferenceImportConfigs: Record<
     ],
     idField: "department_id",
     mappingScope: "department",
+    manualEditHelpText:
+      "Department code and department name remain controlled by the import workflow. Manual edits here update group, status, and effective-date fields only.",
+    manualEditableFields: [
+      editableText("departmentGroup", "department_group", "Department Group"),
+      activeStatusField(),
+      editableDate("effectiveStartDate", "effective_start_date", "Effective Start"),
+      editableDate("effectiveEndDate", "effective_end_date", "Effective End"),
+      editableTextarea("changeReason", "change_reason", "Change Reason")
+    ],
     nameField: "department_name",
     pageTitle: "Department List Update",
     pluralLabel: "departments",
@@ -290,6 +349,20 @@ export const simpleReferenceImportConfigs: Record<
     ],
     idField: "function_id",
     mappingScope: "function",
+    manualEditHelpText:
+      "Function code and function name remain controlled by the import workflow. Manual edits here update group, description, status, and effective-date fields only.",
+    manualEditableFields: [
+      editableText("functionGroup", "function_group", "Function Group"),
+      editableTextarea(
+        "functionDescription",
+        "function_description",
+        "Function Description"
+      ),
+      activeStatusField(),
+      editableDate("effectiveStartDate", "effective_start_date", "Effective Start"),
+      editableDate("effectiveEndDate", "effective_end_date", "Effective End"),
+      editableTextarea("changeReason", "change_reason", "Change Reason")
+    ],
     nameField: "function_name",
     pageTitle: "Function List Update",
     pluralLabel: "functions",
@@ -346,6 +419,59 @@ function optionalField(
     dbField,
     defaultColumn,
     key,
+    label
+  };
+}
+
+function activeStatusField(): SimpleReferenceEditableField {
+  return {
+    dbField: "active_status",
+    formKey: "activeStatus",
+    inputType: "select",
+    label: "Active Status",
+    nullable: false,
+    options: [
+      { label: "Active", value: "active" },
+      { label: "Inactive", value: "inactive" }
+    ]
+  };
+}
+
+function editableDate(
+  formKey: string,
+  dbField: string,
+  label: string
+): SimpleReferenceEditableField {
+  return {
+    dbField,
+    formKey,
+    inputType: "date",
+    label
+  };
+}
+
+function editableText(
+  formKey: string,
+  dbField: string,
+  label: string
+): SimpleReferenceEditableField {
+  return {
+    dbField,
+    formKey,
+    inputType: "text",
+    label
+  };
+}
+
+function editableTextarea(
+  formKey: string,
+  dbField: string,
+  label: string
+): SimpleReferenceEditableField {
+  return {
+    dbField,
+    formKey,
+    inputType: "textarea",
     label
   };
 }

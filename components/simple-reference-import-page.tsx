@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { AppShell } from "@/components/app-shell";
 import { SimpleReferenceImportForm } from "@/components/simple-reference-import-form";
+import { SimpleReferenceManualUpdateForm } from "@/components/simple-reference-manual-update-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { ensureAppUserForAuthUser } from "@/lib/auth/app-user";
 import { requireUser } from "@/lib/auth/session";
@@ -20,14 +21,14 @@ export async function SimpleReferenceImportPage({
   const authUser = await requireUser();
   const adminClient = createAdminClient();
   const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
-  const [rowsResult, activeCount] = await Promise.all([
+  const [rowsResult, referenceCount] = await Promise.all([
     loadReferenceRows({
       adminClient,
       config,
       organizationId: appUser.organization_id,
       search
     }),
-    loadActiveReferenceCount({
+    loadReferenceCount({
       adminClient,
       config,
       organizationId: appUser.organization_id
@@ -74,7 +75,7 @@ export async function SimpleReferenceImportPage({
               {config.tableTitle}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {activeCount} {config.pluralLabel} available.
+              {referenceCount} {config.pluralLabel} available.
             </p>
           </div>
 
@@ -123,12 +124,19 @@ export async function SimpleReferenceImportPage({
                             {column.label}
                           </th>
                         ))}
+                        {config.manualEditableFields.length > 0 ? (
+                          <th className="py-3 font-medium">Actions</th>
+                        ) : null}
                       </tr>
                     </thead>
                     <tbody>
                       {rows.map((row) => (
                         <tr
-                          className="border-b border-border align-top"
+                          className={
+                            row.active_status === "inactive"
+                              ? "border-b border-border align-top opacity-75"
+                              : "border-b border-border align-top"
+                          }
                           key={String(row[config.idField])}
                         >
                           {config.tableColumns.map((column, index) => (
@@ -143,6 +151,14 @@ export async function SimpleReferenceImportPage({
                               {formatTableValue(row[column.dbField], column.dbField)}
                             </td>
                           ))}
+                          {config.manualEditableFields.length > 0 ? (
+                            <td className="py-3">
+                              <SimpleReferenceManualUpdateForm
+                                config={config}
+                                row={row}
+                              />
+                            </td>
+                          ) : null}
                         </tr>
                       ))}
                     </tbody>
@@ -169,13 +185,18 @@ async function loadReferenceRows({
   search: string;
 }) {
   const selectedFields = Array.from(
-    new Set([config.idField, ...config.tableColumns.map((column) => column.dbField)])
+    new Set([
+      config.idField,
+      config.codeField,
+      config.nameField,
+      ...config.tableColumns.map((column) => column.dbField),
+      ...config.manualEditableFields.map((field) => field.dbField)
+    ])
   ).join(", ");
   let query = adminClient
     .from(config.targetTable)
     .select(selectedFields)
     .eq("organization_id", organizationId)
-    .eq("active_status", "active")
     .order(config.codeField, { ascending: true })
     .limit(250);
 
@@ -191,7 +212,7 @@ async function loadReferenceRows({
   return query.returns<ReferenceRow[]>();
 }
 
-async function loadActiveReferenceCount({
+async function loadReferenceCount({
   adminClient,
   config,
   organizationId
@@ -203,8 +224,7 @@ async function loadActiveReferenceCount({
   const result = await adminClient
     .from(config.targetTable)
     .select("*", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .eq("active_status", "active");
+    .eq("organization_id", organizationId);
 
   return result.count ?? 0;
 }
@@ -224,5 +244,17 @@ function formatTableValue(value: unknown, field: string) {
     }).format(new Date(String(value)));
   }
 
+  if (field === "active_status") {
+    return titleize(String(value));
+  }
+
   return String(value);
+}
+
+function titleize(value: string) {
+  return value
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }

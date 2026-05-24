@@ -9,7 +9,8 @@ import {
   buildSimpleReferencePreview
 } from "@/lib/imports/simple-reference-import";
 import {
-  getSimpleReferenceImportConfig
+  getSimpleReferenceImportConfig,
+  type SimpleReferenceEditableField
 } from "@/lib/imports/simple-reference-import-config";
 import {
   initialSimpleReferenceCommitState,
@@ -20,6 +21,11 @@ import {
   type SimpleReferencePreviewState
 } from "@/lib/imports/simple-reference-import-state";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+export type SimpleReferenceManualUpdateState = {
+  message: string | null;
+  status: "idle" | "success" | "error";
+};
 
 export async function previewSimpleReferenceImportAction(
   _previousState: SimpleReferencePreviewState,
@@ -95,6 +101,99 @@ export async function previewSimpleReferenceImportAction(
   }
 }
 
+export async function updateSimpleReferenceManualAction(
+  _previousState: SimpleReferenceManualUpdateState,
+  formData: FormData
+): Promise<SimpleReferenceManualUpdateState> {
+  const route = getStringValue(formData.get("route"));
+  const config = getSimpleReferenceImportConfig(route);
+
+  if (!config) {
+    return manualUpdateError("This reference type is not supported.");
+  }
+
+  try {
+    const authUser = await requireUser();
+    const adminClient = createAdminClient();
+    const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
+    const rowId = getStringValue(formData.get("rowId"));
+
+    if (!rowId) {
+      return manualUpdateError("Reference row ID was not provided.");
+    }
+
+    const selectedFields = getManualUpdateSelectFields(config);
+    const beforeResult = await adminClient
+      .from(config.targetTable)
+      .select(selectedFields)
+      .eq("organization_id", appUser.organization_id)
+      .eq(config.idField, rowId)
+      .maybeSingle<Record<string, unknown>>();
+
+    if (beforeResult.error) {
+      return manualUpdateError(beforeResult.error.message);
+    }
+
+    if (!beforeResult.data) {
+      return manualUpdateError(`${config.tableTitle} row could not be found.`);
+    }
+
+    const updatePayload = buildManualUpdatePayload({
+      fields: config.manualEditableFields,
+      formData,
+      userId: appUser.user_id
+    });
+
+    const effectiveStart = String(updatePayload.effective_start_date ?? "");
+    const effectiveEnd = String(updatePayload.effective_end_date ?? "");
+
+    if (effectiveStart && effectiveEnd && effectiveEnd < effectiveStart) {
+      return manualUpdateError("Effective End cannot be before Effective Start.");
+    }
+
+    const updateResult = await adminClient
+      .from(config.targetTable)
+      .update(updatePayload)
+      .eq("organization_id", appUser.organization_id)
+      .eq(config.idField, rowId)
+      .select(selectedFields)
+      .single<Record<string, unknown>>();
+
+    if (updateResult.error) {
+      return manualUpdateError(updateResult.error.message);
+    }
+
+    await adminClient.from("audit_logs").insert({
+      action_type: `${config.auditPrefix}_manual_update`,
+      actor_user_id: appUser.user_id,
+      after_payload: updateResult.data,
+      before_payload: beforeResult.data,
+      entity_id: rowId,
+      entity_table: config.targetTable,
+      metadata: {
+        route: `/imports/${config.route}`,
+        updated_fields: config.manualEditableFields.map((field) => field.dbField)
+      },
+      organization_id: appUser.organization_id
+    });
+
+    revalidatePath(`/imports/${config.route}`);
+    revalidatePath("/imports/reference");
+    revalidatePath("/analysis/calculation-runs");
+
+    return {
+      message: `${config.tableTitle} ${beforeResult.data[config.codeField] ?? ""} updated.`,
+      status: "success"
+    };
+  } catch (error) {
+    return manualUpdateError(
+      error instanceof Error
+        ? error.message
+        : `${config.tableTitle} manual update failed.`
+    );
+  }
+}
+
 export async function commitSimpleReferenceImportAction(
   _previousState: SimpleReferenceCommitState,
   formData: FormData
@@ -162,6 +261,71 @@ function getStringValue(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function buildManualUpdatePayload({
+  fields,
+  formData,
+  userId
+}: {
+  fields: SimpleReferenceEditableField[];
+  formData: FormData;
+  userId: string;
+}) {
+  const payload: Record<string, unknown> = {
+    source_method: "manual",
+    updated_at: new Date().toISOString(),
+    updated_by: userId
+  };
+
+  for (const field of fields) {
+    const value = getStringValue(formData.get(field.formKey));
+
+    if (field.inputType === "select") {
+      const allowedValues = field.options?.map((option) => option.value) ?? [];
+      if (!allowedValues.includes(value)) {
+        throw new Error(`${field.label} is not valid.`);
+      }
+
+      payload[field.dbField] = value;
+      continue;
+    }
+
+    if (field.inputType === "date") {
+      payload[field.dbField] = getDateOrNull(value, field.label);
+      continue;
+    }
+
+    payload[field.dbField] = value || (field.nullable === false ? "" : null);
+  }
+
+  return payload;
+}
+
+function getDateOrNull(value: string, fieldLabel: string) {
+  if (!value) return null;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${fieldLabel} must be a valid date.`);
+  }
+
+  return value;
+}
+
+function getManualUpdateSelectFields(
+  config: NonNullable<ReturnType<typeof getSimpleReferenceImportConfig>>
+) {
+  return Array.from(
+    new Set([
+      config.idField,
+      config.codeField,
+      config.nameField,
+      ...config.manualEditableFields.map((field) => field.dbField),
+      "source_method",
+      "updated_at",
+      "updated_by"
+    ])
+  ).join(", ");
+}
+
 function previewError(message: string): SimpleReferencePreviewState {
   return {
     ...initialSimpleReferencePreviewState,
@@ -173,6 +337,13 @@ function previewError(message: string): SimpleReferencePreviewState {
 function commitError(message: string): SimpleReferenceCommitState {
   return {
     ...initialSimpleReferenceCommitState,
+    message,
+    status: "error"
+  };
+}
+
+function manualUpdateError(message: string): SimpleReferenceManualUpdateState {
+  return {
     message,
     status: "error"
   };

@@ -20,9 +20,13 @@ export type FundImportPreviewRow = {
   fundGroup: string;
   fundName: string;
   fundType: string;
+  includeInCashReconciliation: string;
+  includeInStandardReporting: string;
   issueMessage: string;
   majorFundFlag: string;
+  reportingExclusionReason: string;
   reportingModel: string;
+  reportingTreatment: string;
   rowStatus:
     | "new"
     | "changed"

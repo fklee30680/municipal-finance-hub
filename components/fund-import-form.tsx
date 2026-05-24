@@ -120,6 +120,26 @@ export function FundImportForm() {
                 name="majorFundFlagColumn"
               />
               <TextInput
+                defaultValue="Reporting Treatment"
+                label="Reporting Treatment"
+                name="reportingTreatmentColumn"
+              />
+              <TextInput
+                defaultValue="Include In Standard Reporting"
+                label="Include In Standard Reporting"
+                name="includeInStandardReportingColumn"
+              />
+              <TextInput
+                defaultValue="Include In Cash Reconciliation"
+                label="Include In Cash Reconciliation"
+                name="includeInCashReconciliationColumn"
+              />
+              <TextInput
+                defaultValue="Reporting Exclusion Reason"
+                label="Reporting Exclusion Reason"
+                name="reportingExclusionReasonColumn"
+              />
+              <TextInput
                 defaultValue="Effective Start Date"
                 label="Effective Start Date"
                 name="effectiveStartDateColumn"
@@ -293,7 +313,7 @@ function FundPreviewModal({
                 </label>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1500px] border-collapse text-left text-sm">
+                  <table className="w-full min-w-[1900px] border-collapse text-left text-sm">
                     <thead>
                       <tr className="border-b border-border text-muted-foreground">
                         <th className="py-3 pr-3 font-medium">Row</th>
@@ -303,6 +323,18 @@ function FundPreviewModal({
                         <th className="py-3 pr-3 font-medium">Reporting Model</th>
                         <th className="py-3 pr-3 font-medium">Fund Group</th>
                         <th className="py-3 pr-3 font-medium">Major Fund</th>
+                        <th className="py-3 pr-3 font-medium">
+                          Reporting Treatment
+                        </th>
+                        <th className="py-3 pr-3 font-medium">
+                          Standard Reporting
+                        </th>
+                        <th className="py-3 pr-3 font-medium">
+                          Cash Reconciliation
+                        </th>
+                        <th className="py-3 pr-3 font-medium">
+                          Reporting Exclusion Reason
+                        </th>
                         <th className="py-3 pr-3 font-medium">Effective Start</th>
                         <th className="py-3 pr-3 font-medium">Effective End</th>
                         <th className="py-3 pr-3 font-medium">Active Status</th>
@@ -357,6 +389,30 @@ function FundPreviewModal({
                           />
                           <EditableCell
                             field="majorFundFlag"
+                            index={index}
+                            rows={rows}
+                            setRows={setRows}
+                          />
+                          <EditableCell
+                            field="reportingTreatment"
+                            index={index}
+                            rows={rows}
+                            setRows={setRows}
+                          />
+                          <EditableCell
+                            field="includeInStandardReporting"
+                            index={index}
+                            rows={rows}
+                            setRows={setRows}
+                          />
+                          <EditableCell
+                            field="includeInCashReconciliation"
+                            index={index}
+                            rows={rows}
+                            setRows={setRows}
+                          />
+                          <EditableCell
+                            field="reportingExclusionReason"
                             index={index}
                             rows={rows}
                             setRows={setRows}
@@ -515,8 +571,12 @@ function EditableCell({
     | "fundGroup"
     | "fundName"
     | "fundType"
+    | "includeInCashReconciliation"
+    | "includeInStandardReporting"
     | "majorFundFlag"
+    | "reportingExclusionReason"
     | "reportingModel"
+    | "reportingTreatment"
   >;
   index: number;
   rows: FundImportPreviewRow[];

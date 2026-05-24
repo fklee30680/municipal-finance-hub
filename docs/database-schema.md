@@ -164,6 +164,13 @@ Preview can supersede prior preview runs for the same import batch without delet
 
 Slice 6 mapping import records are non-financial staging/review records. Committed accepted rows are inserted into `funds`, `objects`, `acfr_mappings`, `departments`, or `functions` and linked to a new `mapping_versions` record.
 
+Funds now distinguish valid/usable codes from reporting presentation behavior.
+`funds.active_status` remains the validity flag. `reporting_treatment`,
+`include_in_standard_reporting`, `include_in_cash_reconciliation`, and
+`reporting_exclusion_reason` allow active funds such as pooled cash,
+clearing, elimination, or reconciliation-only funds to be excluded from standard
+reporting without being treated as inactive or missing.
+
 ## Slice 7 Validation Tables
 
 Slice 7 adds validation persistence for previewed trial balance imports:

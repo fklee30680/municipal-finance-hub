@@ -17,6 +17,16 @@ const allowedReportingModels = new Set([
   "other"
 ]);
 const allowedActiveStatuses = new Set(["active", "inactive"]);
+const allowedReportingTreatments = new Set([
+  "reportable",
+  "pooled_cash",
+  "reconciliation_only",
+  "clearing",
+  "elimination",
+  "internal_service",
+  "fiduciary_excluded",
+  "other_excluded"
+]);
 
 export type FundImportMapping = {
   activeStatusColumn: string;
@@ -27,8 +37,12 @@ export type FundImportMapping = {
   fundGroupColumn: string;
   fundNameColumn: string;
   fundTypeColumn: string;
+  includeInCashReconciliationColumn: string;
+  includeInStandardReportingColumn: string;
   majorFundFlagColumn: string;
+  reportingExclusionReasonColumn: string;
   reportingModelColumn: string;
+  reportingTreatmentColumn: string;
 };
 
 type ExistingFund = {
@@ -41,8 +55,12 @@ type ExistingFund = {
   fund_id: string;
   fund_name: string;
   fund_type: string | null;
+  include_in_cash_reconciliation: boolean | null;
+  include_in_standard_reporting: boolean | null;
   major_fund_flag: string | null;
+  reporting_exclusion_reason: string | null;
   reporting_model: string | null;
+  reporting_treatment: string | null;
 };
 
 type ParsedSheet = {
@@ -344,6 +362,17 @@ function buildRowDraft({
   row: string[];
   sourceRowNumber: number;
 }): FundImportPreviewRow {
+  const reportingTreatment = normalizeReportingTreatment(
+    readColumn(row, resolvedColumns.reportingTreatment)
+  );
+  const explicitStandardReporting = normalizeBooleanText(
+    readColumn(row, resolvedColumns.includeInStandardReporting)
+  );
+  const explicitCashReconciliation = normalizeBooleanText(
+    readColumn(row, resolvedColumns.includeInCashReconciliation)
+  );
+  const defaults = getReportingTreatmentDefaults(reportingTreatment);
+
   return {
     activeStatus: normalizeActiveStatus(readColumn(row, resolvedColumns.activeStatus)),
     changeReason: readColumn(row, resolvedColumns.changeReason),
@@ -353,9 +382,18 @@ function buildRowDraft({
     fundGroup: readColumn(row, resolvedColumns.fundGroup),
     fundName: readColumn(row, resolvedColumns.fundName),
     fundType: readColumn(row, resolvedColumns.fundType),
+    includeInCashReconciliation:
+      explicitCashReconciliation || defaults.includeInCashReconciliation,
+    includeInStandardReporting:
+      explicitStandardReporting || defaults.includeInStandardReporting,
     issueMessage: "",
     majorFundFlag: readColumn(row, resolvedColumns.majorFundFlag),
+    reportingExclusionReason: readColumn(
+      row,
+      resolvedColumns.reportingExclusionReason
+    ),
     reportingModel: normalizeReportingModel(readColumn(row, resolvedColumns.reportingModel)),
+    reportingTreatment,
     rowStatus: "new",
     sourceRowNumber
   };
@@ -456,6 +494,72 @@ function validateFundFields(row: FundImportPreviewRow) {
       suggestedFix: "Use one of the allowed reporting model values.",
       targetFieldName: "reporting_model",
       transformedValue: row.reportingModel
+    }));
+  }
+
+  if (
+    row.reportingTreatment &&
+    !allowedReportingTreatments.has(row.reportingTreatment)
+  ) {
+    issues.push(issue({
+      issueMessage:
+        "Reporting treatment must be reportable, pooled_cash, reconciliation_only, clearing, elimination, internal_service, fiduciary_excluded, or other_excluded.",
+      issueSeverity: "error",
+      issueType: "invalid_reporting_treatment",
+      rawValue: row.reportingTreatment,
+      sourceRowNumber: row.sourceRowNumber,
+      suggestedFix: "Use one of the allowed reporting treatment values.",
+      targetFieldName: "reporting_treatment",
+      transformedValue: row.reportingTreatment
+    }));
+  }
+
+  if (
+    row.includeInStandardReporting &&
+    !["true", "false"].includes(row.includeInStandardReporting)
+  ) {
+    issues.push(issue({
+      issueMessage: "Include in standard reporting must be yes/no or true/false.",
+      issueSeverity: "error",
+      issueType: "invalid_standard_reporting_flag",
+      rawValue: row.includeInStandardReporting,
+      sourceRowNumber: row.sourceRowNumber,
+      suggestedFix: "Use yes, no, true, false, included, or excluded.",
+      targetFieldName: "include_in_standard_reporting",
+      transformedValue: row.includeInStandardReporting
+    }));
+  }
+
+  if (
+    row.includeInCashReconciliation &&
+    !["true", "false"].includes(row.includeInCashReconciliation)
+  ) {
+    issues.push(issue({
+      issueMessage: "Include in cash reconciliation must be yes/no or true/false.",
+      issueSeverity: "error",
+      issueType: "invalid_cash_reconciliation_flag",
+      rawValue: row.includeInCashReconciliation,
+      sourceRowNumber: row.sourceRowNumber,
+      suggestedFix: "Use yes, no, true, false, included, or excluded.",
+      targetFieldName: "include_in_cash_reconciliation",
+      transformedValue: row.includeInCashReconciliation
+    }));
+  }
+
+  if (
+    row.includeInStandardReporting === "false" &&
+    !row.reportingExclusionReason
+  ) {
+    issues.push(issue({
+      issueMessage:
+        "Fund is excluded from standard reporting without an exclusion reason.",
+      issueSeverity: "warning",
+      issueType: "missing_reporting_exclusion_reason",
+      sourceRowNumber: row.sourceRowNumber,
+      suggestedFix:
+        "Add a short reason, such as pooled cash fund used for reconciliation only.",
+      targetFieldName: "reporting_exclusion_reason",
+      transformedValue: row.reportingExclusionReason
     }));
   }
 
@@ -628,8 +732,14 @@ function toFundMutationValues({
     fund_group: row.fundGroup || null,
     fund_name: row.fundName,
     fund_type: row.fundType || null,
+    include_in_cash_reconciliation:
+      row.includeInCashReconciliation === "true",
+    include_in_standard_reporting:
+      row.includeInStandardReporting !== "false",
     major_fund_flag: row.majorFundFlag || null,
+    reporting_exclusion_reason: row.reportingExclusionReason || null,
     reporting_model: row.reportingModel || null,
+    reporting_treatment: row.reportingTreatment || "reportable",
     updated_by: userId || undefined
   };
 }
@@ -650,8 +760,21 @@ function resolveFundColumns({
     fundGroup: resolveColumnReference(mapping.fundGroupColumn, headers),
     fundName: resolveColumnReference(mapping.fundNameColumn, headers),
     fundType: resolveColumnReference(mapping.fundTypeColumn, headers),
+    includeInCashReconciliation: resolveColumnReference(
+      mapping.includeInCashReconciliationColumn,
+      headers
+    ),
+    includeInStandardReporting: resolveColumnReference(
+      mapping.includeInStandardReportingColumn,
+      headers
+    ),
     majorFundFlag: resolveColumnReference(mapping.majorFundFlagColumn, headers),
-    reportingModel: resolveColumnReference(mapping.reportingModelColumn, headers)
+    reportingExclusionReason: resolveColumnReference(
+      mapping.reportingExclusionReasonColumn,
+      headers
+    ),
+    reportingModel: resolveColumnReference(mapping.reportingModelColumn, headers),
+    reportingTreatment: resolveColumnReference(mapping.reportingTreatmentColumn, headers)
   };
 }
 
@@ -750,7 +873,7 @@ async function loadExistingFunds({
   const result = await adminClient
     .from("funds")
     .select(
-      "fund_id, fund_code, fund_name, fund_type, reporting_model, fund_group, major_fund_flag, active_status, effective_start_date, effective_end_date, change_reason"
+      "fund_id, fund_code, fund_name, fund_type, reporting_model, fund_group, major_fund_flag, reporting_treatment, include_in_standard_reporting, include_in_cash_reconciliation, reporting_exclusion_reason, active_status, effective_start_date, effective_end_date, change_reason"
     )
     .eq("organization_id", organizationId)
     .returns<ExistingFund[]>();
@@ -898,6 +1021,61 @@ function normalizeActiveStatus(value: string) {
 
 function normalizeReportingModel(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "_").replace(/-/g, "_");
+}
+
+function normalizeReportingTreatment(value: string) {
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, "_").replace(/-/g, "_");
+  if (!normalized) {
+    return "reportable";
+  }
+
+  return normalized;
+}
+
+function normalizeBooleanText(value: string) {
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, "_").replace(/-/g, "_");
+  if (!normalized) {
+    return "";
+  }
+
+  if (["yes", "y", "true", "1", "included", "include"].includes(normalized)) {
+    return "true";
+  }
+
+  if (["no", "n", "false", "0", "excluded", "exclude"].includes(normalized)) {
+    return "false";
+  }
+
+  return normalized;
+}
+
+function getReportingTreatmentDefaults(reportingTreatment: string) {
+  if (reportingTreatment === "pooled_cash") {
+    return {
+      includeInCashReconciliation: "true",
+      includeInStandardReporting: "false"
+    };
+  }
+
+  if (
+    [
+      "reconciliation_only",
+      "clearing",
+      "elimination",
+      "fiduciary_excluded",
+      "other_excluded"
+    ].includes(reportingTreatment)
+  ) {
+    return {
+      includeInCashReconciliation: "false",
+      includeInStandardReporting: "false"
+    };
+  }
+
+  return {
+    includeInCashReconciliation: "false",
+    includeInStandardReporting: "true"
+  };
 }
 
 function normalizeDate(value: string) {

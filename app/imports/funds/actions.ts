@@ -147,7 +147,7 @@ export async function updateFundManualAction(
     const beforeResult = await adminClient
       .from("funds")
       .select(
-        "fund_id, fund_code, fund_name, reporting_model, fund_group, major_fund_flag, active_status, effective_start_date, effective_end_date"
+        "fund_id, fund_code, fund_name, reporting_model, fund_group, major_fund_flag, reporting_treatment, include_in_standard_reporting, include_in_cash_reconciliation, reporting_exclusion_reason, active_status, effective_start_date, effective_end_date"
       )
       .eq("organization_id", appUser.organization_id)
       .eq("fund_id", fundId)
@@ -159,8 +159,12 @@ export async function updateFundManualAction(
         fund_group: string | null;
         fund_id: string;
         fund_name: string;
+        include_in_cash_reconciliation: boolean;
+        include_in_standard_reporting: boolean;
         major_fund_flag: string | null;
+        reporting_exclusion_reason: string | null;
         reporting_model: string | null;
+        reporting_treatment: string;
       }>();
 
     if (beforeResult.error) {
@@ -183,11 +187,22 @@ export async function updateFundManualAction(
         "Effective Start"
       ),
       fund_group: getNullableString(formData.get("fundGroup")),
+      include_in_cash_reconciliation: getBooleanSelectValue(
+        formData.get("includeInCashReconciliation"),
+        "Include In Cash Reconciliation"
+      ),
+      include_in_standard_reporting: getBooleanSelectValue(
+        formData.get("includeInStandardReporting"),
+        "Include In Standard Reporting"
+      ),
       major_fund_flag: getAllowedNullableValue({
         allowedValues: ["yes", "no"],
         fieldLabel: "Major Fund",
         value: getStringValue(formData.get("majorFundFlag"))
       }),
+      reporting_exclusion_reason: getNullableString(
+        formData.get("reportingExclusionReason")
+      ),
       reporting_model: getAllowedNullableValue({
         allowedValues: [
           "governmental",
@@ -198,6 +213,20 @@ export async function updateFundManualAction(
         ],
         fieldLabel: "Reporting Model",
         value: getStringValue(formData.get("reportingModel"))
+      }),
+      reporting_treatment: getAllowedValue({
+        allowedValues: [
+          "reportable",
+          "pooled_cash",
+          "reconciliation_only",
+          "clearing",
+          "elimination",
+          "internal_service",
+          "fiduciary_excluded",
+          "other_excluded"
+        ],
+        fieldLabel: "Reporting Treatment",
+        value: getStringValue(formData.get("reportingTreatment")) || "reportable"
       }),
       source_method: "manual",
       updated_at: new Date().toISOString(),
@@ -218,7 +247,7 @@ export async function updateFundManualAction(
       .eq("organization_id", appUser.organization_id)
       .eq("fund_id", fundId)
       .select(
-        "fund_id, fund_code, fund_name, reporting_model, fund_group, major_fund_flag, active_status, effective_start_date, effective_end_date"
+        "fund_id, fund_code, fund_name, reporting_model, fund_group, major_fund_flag, reporting_treatment, include_in_standard_reporting, include_in_cash_reconciliation, reporting_exclusion_reason, active_status, effective_start_date, effective_end_date"
       )
       .single();
 
@@ -239,6 +268,10 @@ export async function updateFundManualAction(
           "reporting_model",
           "fund_group",
           "major_fund_flag",
+          "reporting_treatment",
+          "include_in_standard_reporting",
+          "include_in_cash_reconciliation",
+          "reporting_exclusion_reason",
           "active_status",
           "effective_start_date",
           "effective_end_date"
@@ -273,10 +306,22 @@ function getMapping(formData: FormData): FundImportMapping {
     fundGroupColumn: getStringValue(formData.get("fundGroupColumn")) || "Fund Group",
     fundNameColumn: getStringValue(formData.get("fundNameColumn")) || "Fund Name",
     fundTypeColumn: getStringValue(formData.get("fundTypeColumn")) || "Fund Type",
+    includeInCashReconciliationColumn:
+      getStringValue(formData.get("includeInCashReconciliationColumn")) ||
+      "Include In Cash Reconciliation",
+    includeInStandardReportingColumn:
+      getStringValue(formData.get("includeInStandardReportingColumn")) ||
+      "Include In Standard Reporting",
     majorFundFlagColumn:
       getStringValue(formData.get("majorFundFlagColumn")) || "Major Fund Flag",
+    reportingExclusionReasonColumn:
+      getStringValue(formData.get("reportingExclusionReasonColumn")) ||
+      "Reporting Exclusion Reason",
     reportingModelColumn:
-      getStringValue(formData.get("reportingModelColumn")) || "Reporting Model"
+      getStringValue(formData.get("reportingModelColumn")) || "Reporting Model",
+    reportingTreatmentColumn:
+      getStringValue(formData.get("reportingTreatmentColumn")) ||
+      "Reporting Treatment"
   };
 }
 
@@ -339,6 +384,17 @@ function getAllowedNullableValue({
   }
 
   return value;
+}
+
+function getBooleanSelectValue(
+  value: FormDataEntryValue | null,
+  fieldLabel: string
+) {
+  const stringValue = getStringValue(value);
+  if (stringValue === "true") return true;
+  if (stringValue === "false") return false;
+
+  throw new Error(`${fieldLabel} is not valid.`);
 }
 
 function previewError(message: string): FundImportPreviewState {

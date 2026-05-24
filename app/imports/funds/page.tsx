@@ -17,8 +17,12 @@ type FundRow = {
   fund_id: string;
   fund_name: string;
   fund_type: string | null;
+  include_in_cash_reconciliation: boolean;
+  include_in_standard_reporting: boolean;
   major_fund_flag: string | null;
+  reporting_exclusion_reason: string | null;
   reporting_model: string | null;
+  reporting_treatment: string;
   updated_at: string | null;
 };
 
@@ -131,7 +135,7 @@ export default async function FundImportPage({
               ) : null}
               {funds.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1180px] border-collapse text-left text-sm">
+                  <table className="w-full min-w-[1580px] border-collapse text-left text-sm">
                     <thead>
                       <tr className="border-b border-border text-muted-foreground">
                         <th className="py-3 pr-4 font-medium">Fund Code</th>
@@ -140,6 +144,18 @@ export default async function FundImportPage({
                         <th className="py-3 pr-4 font-medium">Reporting Model</th>
                         <th className="py-3 pr-4 font-medium">Fund Group</th>
                         <th className="py-3 pr-4 font-medium">Major Fund</th>
+                        <th className="py-3 pr-4 font-medium">
+                          Reporting Treatment
+                        </th>
+                        <th className="py-3 pr-4 font-medium">
+                          Standard Reporting
+                        </th>
+                        <th className="py-3 pr-4 font-medium">
+                          Cash Reconciliation
+                        </th>
+                        <th className="py-3 pr-4 font-medium">
+                          Exclusion Reason
+                        </th>
                         <th className="py-3 pr-4 font-medium">Active Status</th>
                         <th className="py-3 pr-4 font-medium">Effective Start</th>
                         <th className="py-3 pr-4 font-medium">Effective End</th>
@@ -174,6 +190,24 @@ export default async function FundImportPage({
                           </td>
                           <td className="py-3 pr-4 text-muted-foreground">
                             {formatMajorFund(fund.major_fund_flag)}
+                          </td>
+                          <td className="py-3 pr-4 text-muted-foreground">
+                            <StatusPill
+                              value={formatReportingTreatment(
+                                fund.reporting_treatment
+                              )}
+                            />
+                          </td>
+                          <td className="py-3 pr-4 text-muted-foreground">
+                            {fund.include_in_standard_reporting
+                              ? "Included"
+                              : "Excluded"}
+                          </td>
+                          <td className="py-3 pr-4 text-muted-foreground">
+                            {fund.include_in_cash_reconciliation ? "Yes" : "No"}
+                          </td>
+                          <td className="max-w-52 py-3 pr-4 text-muted-foreground">
+                            {fund.reporting_exclusion_reason ?? "Not set"}
                           </td>
                           <td className="py-3 pr-4 text-muted-foreground">
                             <StatusPill
@@ -222,7 +256,7 @@ async function loadFunds({
   let query = adminClient
     .from("funds")
     .select(
-      "fund_id, fund_code, fund_name, fund_type, reporting_model, fund_group, major_fund_flag, active_status, effective_start_date, effective_end_date, updated_at"
+      "fund_id, fund_code, fund_name, fund_type, reporting_model, fund_group, major_fund_flag, reporting_treatment, include_in_standard_reporting, include_in_cash_reconciliation, reporting_exclusion_reason, active_status, effective_start_date, effective_end_date, updated_at"
     )
     .eq("organization_id", organizationId)
     .order("fund_code", { ascending: true })
@@ -231,7 +265,7 @@ async function loadFunds({
   if (search.trim()) {
     const pattern = `%${search.trim()}%`;
     query = query.or(
-      `fund_code.ilike.${pattern},fund_name.ilike.${pattern},fund_type.ilike.${pattern},reporting_model.ilike.${pattern},fund_group.ilike.${pattern},active_status.ilike.${pattern}`
+      `fund_code.ilike.${pattern},fund_name.ilike.${pattern},fund_type.ilike.${pattern},reporting_model.ilike.${pattern},fund_group.ilike.${pattern},reporting_treatment.ilike.${pattern},reporting_exclusion_reason.ilike.${pattern},active_status.ilike.${pattern}`
     );
   }
 
@@ -290,6 +324,10 @@ function formatMajorFund(value: string | null) {
 
 function formatReportingModel(value: string | null) {
   return value ? titleize(value.replaceAll("_", " ")) : "Not set";
+}
+
+function formatReportingTreatment(value: string | null) {
+  return value ? titleize(value.replaceAll("_", " ")) : "Reportable";
 }
 
 function titleize(value: string) {

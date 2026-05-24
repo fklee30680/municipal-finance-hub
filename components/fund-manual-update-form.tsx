@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil, X } from "lucide-react";
-import { useActionState, useEffect, useId, useRef } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -18,8 +18,12 @@ type EditableFund = {
   fund_code: string;
   fund_group: string | null;
   fund_id: string;
+  include_in_cash_reconciliation: boolean;
+  include_in_standard_reporting: boolean;
   major_fund_flag: string | null;
+  reporting_exclusion_reason: string | null;
   reporting_model: string | null;
+  reporting_treatment: string;
 };
 
 const initialState: FundManualUpdateState = {
@@ -50,6 +54,17 @@ const defaultFundGroups = [
   "Other"
 ] as const;
 
+const reportingTreatments = [
+  ["reportable", "Reportable"],
+  ["pooled_cash", "Pooled Cash"],
+  ["reconciliation_only", "Reconciliation Only"],
+  ["clearing", "Clearing"],
+  ["elimination", "Elimination"],
+  ["internal_service", "Internal Service"],
+  ["fiduciary_excluded", "Fiduciary Excluded"],
+  ["other_excluded", "Other Excluded"]
+] as const;
+
 export function FundManualUpdateForm({
   fund,
   fundGroups
@@ -66,6 +81,15 @@ export function FundManualUpdateForm({
     initialState
   );
   const fundGroupOptions = buildFundGroupOptions(fund.fund_group, fundGroups);
+  const [reportingTreatment, setReportingTreatment] = useState(
+    fund.reporting_treatment ?? "reportable"
+  );
+  const [standardReporting, setStandardReporting] = useState(
+    fund.include_in_standard_reporting ? "true" : "false"
+  );
+  const [cashReconciliation, setCashReconciliation] = useState(
+    fund.include_in_cash_reconciliation ? "true" : "false"
+  );
 
   useEffect(() => {
     if (state.status === "success") {
@@ -166,6 +190,54 @@ export function FundManualUpdateForm({
             </label>
 
             <label className="space-y-2 text-sm font-medium text-foreground">
+              Reporting Treatment
+              <select
+                className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                name="reportingTreatment"
+                onChange={(event) => {
+                  const nextTreatment = event.target.value;
+                  setReportingTreatment(nextTreatment);
+                  const defaults = getTreatmentDefaults(nextTreatment);
+                  setStandardReporting(defaults.standardReporting);
+                  setCashReconciliation(defaults.cashReconciliation);
+                }}
+                value={reportingTreatment}
+              >
+                {reportingTreatments.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-2 text-sm font-medium text-foreground">
+              Standard Reporting
+              <select
+                className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                name="includeInStandardReporting"
+                onChange={(event) => setStandardReporting(event.target.value)}
+                value={standardReporting}
+              >
+                <option value="true">Included</option>
+                <option value="false">Excluded</option>
+              </select>
+            </label>
+
+            <label className="space-y-2 text-sm font-medium text-foreground">
+              Cash Reconciliation
+              <select
+                className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                name="includeInCashReconciliation"
+                onChange={(event) => setCashReconciliation(event.target.value)}
+                value={cashReconciliation}
+              >
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+              </select>
+            </label>
+
+            <label className="space-y-2 text-sm font-medium text-foreground">
               Active Status
               <select
                 className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -194,11 +266,22 @@ export function FundManualUpdateForm({
                 type="date"
               />
             </label>
+
+            <label className="space-y-2 text-sm font-medium text-foreground md:col-span-2">
+              Reporting Exclusion Reason
+              <textarea
+                className="min-h-20 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                defaultValue={fund.reporting_exclusion_reason ?? ""}
+                name="reportingExclusionReason"
+                placeholder="Example: Pooled cash fund used for consolidated cash and reconciliation only."
+              />
+            </label>
           </div>
 
           <div className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
-            Fund code, name, and fund type remain controlled by the import
-            workflow. Manual edits here update setup/classification fields only.
+            Active Status means the fund code is valid and usable. Reporting
+            Treatment and inclusion flags control whether it appears in normal
+            reporting or cash reconciliation workflows.
           </div>
 
           {state.message ? (
@@ -248,4 +331,33 @@ function normalizeMajorFundFlag(value: string | null) {
     return "no";
   }
   return "";
+}
+
+function getTreatmentDefaults(reportingTreatment: string) {
+  if (reportingTreatment === "pooled_cash") {
+    return {
+      cashReconciliation: "true",
+      standardReporting: "false"
+    };
+  }
+
+  if (
+    [
+      "reconciliation_only",
+      "clearing",
+      "elimination",
+      "fiduciary_excluded",
+      "other_excluded"
+    ].includes(reportingTreatment)
+  ) {
+    return {
+      cashReconciliation: "false",
+      standardReporting: "false"
+    };
+  }
+
+  return {
+    cashReconciliation: "false",
+    standardReporting: "true"
+  };
 }

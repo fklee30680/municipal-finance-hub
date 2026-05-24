@@ -79,6 +79,12 @@ The Import Workspace improves the user path across the completed import slices. 
 
 Reference imports also have focused `/imports/funds`, `/imports/objects`, `/imports/acfr`, `/imports/departments`, and `/imports/functions` pages patterned after the invoice-management PO List Update flow. These pages use temporary preview rows, let users edit or exclude staged rows before commit, create mapping versions for committed inserts/updates, and show read-only reference tables.
 
+Funds support separate reporting treatment controls so an active, valid fund can
+be excluded from normal statement/dashboard rollups while remaining available
+for cash or reconciliation workflows. This is intended for pooled cash,
+clearing, elimination, and similar operational funds that should not be marked
+inactive just to keep them out of standard reporting.
+
 Current slices still intentionally do not implement dashboards, report generation, budget functionality, or AI commentary.
 
 ## Documentation

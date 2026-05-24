@@ -50,7 +50,7 @@ type ActiveTrialBalanceLine = {
   posting_run_id: string | null;
 };
 
-type ReferenceRow = Record<string, string | number | null>;
+type ReferenceRow = Record<string, boolean | string | number | null>;
 
 type EnrichedLine = ActiveTrialBalanceLine & {
   account_type: string | null;
@@ -59,7 +59,11 @@ type EnrichedLine = ActiveTrialBalanceLine & {
   detailed_account_type: string | null;
   account_type_detailed: string | null;
   fund_type: string | null;
+  include_in_cash_reconciliation: boolean;
+  include_in_standard_reporting: boolean;
   reporting_model: string | null;
+  reporting_treatment: string;
+  reporting_exclusion_reason: string | null;
   statement_category: string | null;
 };
 
@@ -155,7 +159,15 @@ export async function runAnalysisCalculation({
       adminClient,
       organizationId: request.organizationId
     });
-    const enrichedLines = enrichLines(currentLines, references);
+    const standardCurrentLines = filterStandardReportingLines({
+      lines: currentLines,
+      references
+    });
+    const standardComparison = filterComparisonForStandardReporting({
+      comparison,
+      references
+    });
+    const enrichedLines = enrichLines(standardCurrentLines, references);
     const dependencyManifest = buildDependencyManifest({
       comparison,
       currentLines,
@@ -169,7 +181,7 @@ export async function runAnalysisCalculation({
     });
     const results = buildResults({
       calculationRunId,
-      comparison,
+      comparison: standardComparison,
       coverageIssues,
       enrichedLines,
       request,
@@ -534,10 +546,54 @@ function enrichLines(
       cash_flow_category: textOrNull(object?.cash_flow_category),
       detailed_account_type: textOrNull(object?.detailed_account_type),
       fund_type: textOrNull(fund?.fund_type),
+      include_in_cash_reconciliation:
+        booleanValue(fund?.include_in_cash_reconciliation, false),
+      include_in_standard_reporting:
+        booleanValue(fund?.include_in_standard_reporting, true),
       reporting_model: textOrNull(fund?.reporting_model),
+      reporting_exclusion_reason: textOrNull(fund?.reporting_exclusion_reason),
+      reporting_treatment: text(fund?.reporting_treatment) || "reportable",
       statement_category: textOrNull(object?.statement_category)
     };
   });
+}
+
+function filterStandardReportingLines({
+  lines,
+  references
+}: {
+  lines: ActiveTrialBalanceLine[];
+  references: Awaited<ReturnType<typeof loadReferenceRows>>;
+}) {
+  return lines.filter((line) => {
+    const fund = references.funds.get(text(line.fund_code));
+    return booleanValue(fund?.include_in_standard_reporting, true);
+  });
+}
+
+function filterComparisonForStandardReporting({
+  comparison,
+  references
+}: {
+  comparison: Awaited<ReturnType<typeof loadComparisonLines>>;
+  references: Awaited<ReturnType<typeof loadReferenceRows>>;
+}) {
+  return {
+    priorPeriod: {
+      ...comparison.priorPeriod,
+      lines: filterStandardReportingLines({
+        lines: comparison.priorPeriod.lines,
+        references
+      })
+    },
+    priorYear: {
+      ...comparison.priorYear,
+      lines: filterStandardReportingLines({
+        lines: comparison.priorYear.lines,
+        references
+      })
+    }
+  };
 }
 
 function buildMappingCoverageIssues({
@@ -664,6 +720,76 @@ function buildMappingCoverageIssues({
           segmentType: dimension.segmentType,
           severity: "Warning"
         });
+      }
+
+      if (
+        dimension.segmentType === "fund" &&
+        text(referenceRow.active_status) !== "inactive" &&
+        !booleanValue(referenceRow.include_in_standard_reporting, true)
+      ) {
+        const reportingTreatment =
+          text(referenceRow.reporting_treatment) || "reportable";
+        const exclusionReason = text(referenceRow.reporting_exclusion_reason);
+        const includeInCashReconciliation = booleanValue(
+          referenceRow.include_in_cash_reconciliation,
+          false
+        );
+
+        if (reportingTreatment === "pooled_cash") {
+          if (!includeInCashReconciliation) {
+            issues.push({
+              affectedAmount,
+              affectedRowCount: groupedLines.length,
+              coverageIssueType: "pooled_cash_not_in_cash_reconciliation",
+              message: `Fund code ${code} is configured as pooled cash but is not included in cash reconciliation.`,
+              recommendedAction:
+                "Set Include In Cash Reconciliation to Yes or choose a different reporting treatment.",
+              referenceStatus: "active_pooled_cash",
+              referenceTable: dimension.referenceTable,
+              segmentCode: code,
+              segmentName: textOrNull(referenceRow[dimension.nameField]),
+              segmentType: "fund",
+              severity: "Warning"
+            });
+          }
+        } else if (reportingTreatment === "reportable") {
+          issues.push({
+            affectedAmount,
+            affectedRowCount: groupedLines.length,
+            coverageIssueType: "excluded_fund_missing_reporting_treatment",
+            message: `Fund code ${code} is active and excluded from standard reporting but has reportable treatment.`,
+            recommendedAction:
+              "Choose a reporting treatment such as pooled_cash, clearing, elimination, reconciliation_only, or other_excluded.",
+            referenceStatus: "active_excluded",
+            referenceTable: dimension.referenceTable,
+            segmentCode: code,
+            segmentName: textOrNull(referenceRow[dimension.nameField]),
+            segmentType: "fund",
+            severity: "Warning"
+          });
+        }
+
+        if (!exclusionReason) {
+          issues.push({
+            affectedAmount,
+            affectedRowCount: groupedLines.length,
+            coverageIssueType: "excluded_fund_missing_exclusion_reason",
+            message: `Fund code ${code} is active and excluded from standard reporting without an exclusion reason.`,
+            recommendedAction:
+              "Add a reporting exclusion reason so reviewers understand why the fund is excluded.",
+            referenceStatus:
+              reportingTreatment === "pooled_cash"
+                ? "active_pooled_cash"
+                : "active_excluded",
+            referenceTable: dimension.referenceTable,
+            segmentCode: code,
+            segmentName: textOrNull(referenceRow[dimension.nameField]),
+            segmentType: "fund",
+            severity: "Warning"
+          });
+        }
+
+        continue;
       }
 
       for (const [field, issueType, message, severity] of dimension.requiredFields) {
@@ -1609,6 +1735,20 @@ function text(value: unknown) {
 function textOrNull(value: unknown) {
   const normalized = text(value);
   return normalized || null;
+}
+
+function booleanValue(value: unknown, fallback: boolean) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "yes", "1"].includes(normalized)) return true;
+    if (["false", "no", "0"].includes(normalized)) return false;
+  }
+
+  return fallback;
 }
 
 function titleize(value: string) {

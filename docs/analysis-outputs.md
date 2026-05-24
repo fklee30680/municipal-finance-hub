@@ -25,6 +25,15 @@ function codes; inactive reference rows; missing fund type/reporting model; and
 missing or conflicting object classifications needed for statement and cash
 analysis.
 
+Funds separate validity from presentation. `funds.active_status` means the fund
+code is valid and usable; `reporting_treatment`,
+`include_in_standard_reporting`, `include_in_cash_reconciliation`, and
+`reporting_exclusion_reason` control reporting and reconciliation behavior.
+Active pooled cash or reconciliation-only funds are valid mappings, but standard
+analysis outputs exclude funds where `include_in_standard_reporting = false`.
+Mapping coverage still flags missing funds and inactive funds used by posted
+trial balance data.
+
 Calculation runs store a dependency manifest focused on trial balance lineage
 and calculation settings:
 

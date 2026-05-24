@@ -44,6 +44,7 @@ export function FundManualUpdateForm({
   fundGroups: string[];
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const reportingModelRef = useRef<HTMLSelectElement>(null);
   const router = useRouter();
   const titleId = useId();
   const [state, formAction, pending] = useActionState(
@@ -63,7 +64,10 @@ export function FundManualUpdateForm({
     <>
       <button
         className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
-        onClick={() => dialogRef.current?.showModal()}
+        onClick={() => {
+          dialogRef.current?.showModal();
+          window.requestAnimationFrame(() => reportingModelRef.current?.focus());
+        }}
         type="button"
       >
         <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
@@ -108,6 +112,7 @@ export function FundManualUpdateForm({
                 className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 defaultValue={fund.reporting_model ?? ""}
                 name="reportingModel"
+                ref={reportingModelRef}
               >
                 {reportingModels.map(([value, label]) => (
                   <option key={value || "empty"} value={value}>

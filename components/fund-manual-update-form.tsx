@@ -54,6 +54,7 @@ export function FundManualUpdateForm({
 
   useEffect(() => {
     if (state.status === "success") {
+      dialogRef.current?.close();
       router.refresh();
     }
   }, [router, state.status]);
@@ -201,7 +202,7 @@ export function FundManualUpdateForm({
               Cancel
             </button>
             <Button disabled={pending} type="submit">
-              {pending ? "Saving..." : "Save Fund"}
+              {pending ? "Saving..." : "Save and Close"}
             </Button>
           </div>
         </form>

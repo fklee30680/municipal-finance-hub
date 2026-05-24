@@ -131,7 +131,7 @@ export default async function FundImportPage({
               ) : null}
               {funds.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1450px] border-collapse text-left text-sm">
+                  <table className="w-full min-w-[1180px] border-collapse text-left text-sm">
                     <thead>
                       <tr className="border-b border-border text-muted-foreground">
                         <th className="py-3 pr-4 font-medium">Fund Code</th>
@@ -167,16 +167,19 @@ export default async function FundImportPage({
                             {fund.fund_type ?? "Not set"}
                           </td>
                           <td className="py-3 pr-4 text-muted-foreground">
-                            {fund.reporting_model ?? "Not set"}
+                            <StatusPill value={formatReportingModel(fund.reporting_model)} />
                           </td>
                           <td className="py-3 pr-4 text-muted-foreground">
                             {fund.fund_group ?? "Not set"}
                           </td>
                           <td className="py-3 pr-4 text-muted-foreground">
-                            {fund.major_fund_flag ?? "Not set"}
+                            {formatMajorFund(fund.major_fund_flag)}
                           </td>
                           <td className="py-3 pr-4 text-muted-foreground">
-                            {fund.active_status}
+                            <StatusPill
+                              tone={fund.active_status === "inactive" ? "muted" : "default"}
+                              value={titleize(fund.active_status)}
+                            />
                           </td>
                           <td className="py-3 pr-4 text-muted-foreground">
                             {fund.effective_start_date ?? "Open"}
@@ -250,8 +253,49 @@ async function loadFundCount({
   return result.count ?? 0;
 }
 
+function StatusPill({
+  tone = "default",
+  value
+}: {
+  tone?: "default" | "muted";
+  value: string;
+}) {
+  return (
+    <span
+      className={
+        tone === "muted"
+          ? "inline-flex rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground"
+          : "inline-flex rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground"
+      }
+    >
+      {value}
+    </span>
+  );
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium"
   }).format(new Date(value));
+}
+
+function formatMajorFund(value: string | null) {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  if (["yes", "y", "true", "major", "1"].includes(normalized)) return "Yes";
+  if (["no", "n", "false", "non_major", "non-major", "0"].includes(normalized)) {
+    return "No";
+  }
+  return "Not set";
+}
+
+function formatReportingModel(value: string | null) {
+  return value ? titleize(value.replaceAll("_", " ")) : "Not set";
+}
+
+function titleize(value: string) {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }

@@ -77,6 +77,13 @@ Slice 9 adds governed analysis outputs for posted active trial balance rows. Cal
 
 The Import Workspace improves the user path across the completed import slices. Users can upload or resume a source file, inspect headers/sheets, map columns with detected or manual column references, save templates, preview, validate/review, and commit/post from one guided workspace while the governed backend records remain intact.
 
+Trial balance imports also have a focused `/imports/trial-balance` workflow for
+monthly and historical operating loads. It fixes the import type to trial
+balance, uses configured fiscal periods, reuses the latest active saved trial
+balance layout by default, and guides users through upload, preview,
+validation, and post/replace without requiring the generic Import Workspace for
+normal recurring loads.
+
 Reference imports also have focused `/imports/funds`, `/imports/objects`, `/imports/acfr`, `/imports/departments`, and `/imports/functions` pages patterned after the invoice-management PO List Update flow. These pages use temporary preview rows, let users edit or exclude staged rows before commit, create mapping versions for committed inserts/updates, and show read-only reference tables.
 
 Funds support separate reporting treatment controls so an active, valid fund can

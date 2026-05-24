@@ -194,6 +194,10 @@ async function uploadSourceFileInternal(
   const importTypeId = getStringValue(formData.get("importTypeId"));
   const fiscalYearValue = getStringValue(formData.get("fiscalYear"));
   const periodValue = getStringValue(formData.get("period"));
+  const fiscalYearId = getStringValue(formData.get("fiscalYearId"));
+  const fiscalPeriodId = getStringValue(formData.get("fiscalPeriodId"));
+  const templateVersionId = getStringValue(formData.get("templateVersionId"));
+  const accountStructureId = getStringValue(formData.get("accountStructureId"));
   const fileValue = formData.get("file");
 
   if (!importTypeId) {
@@ -255,6 +259,43 @@ async function uploadSourceFileInternal(
 
   if (period !== null && (period < 0 || period > 13)) {
     return errorState("Period must be between 0 and 13.");
+  }
+
+  if (requiresPeriod) {
+    const fiscalSetup = await loadFiscalSetupForUpload({
+      adminClient,
+      fiscalPeriodId,
+      fiscalYear,
+      fiscalYearId,
+      organizationId: appUser.organization_id,
+      period
+    });
+
+    if (!fiscalSetup.ok) {
+      return errorState(fiscalSetup.message);
+    }
+
+    if (fiscalSetup.fiscalYearId) {
+      formData.set("fiscalYearId", fiscalSetup.fiscalYearId);
+    }
+
+    if (fiscalSetup.fiscalPeriodId) {
+      formData.set("fiscalPeriodId", fiscalSetup.fiscalPeriodId);
+    }
+  }
+
+  const selectedTemplate = templateVersionId
+    ? await loadUploadTemplateVersion({
+        accountStructureId,
+        adminClient,
+        importTypeId: importTypeResult.data.import_type_id,
+        organizationId: appUser.organization_id,
+        templateVersionId
+      })
+    : null;
+
+  if (selectedTemplate && !selectedTemplate.ok) {
+    return errorState(selectedTemplate.message);
   }
 
   const fileBuffer = Buffer.from(await fileValue.arrayBuffer());
@@ -330,6 +371,15 @@ async function uploadSourceFileInternal(
       organization_id: appUser.organization_id,
       import_type_id: importTypeResult.data.import_type_id,
       source_file_id: sourceFileResult.data.source_file_id,
+      fiscal_year_id: getStringValue(formData.get("fiscalYearId")) || null,
+      fiscal_period_id: getStringValue(formData.get("fiscalPeriodId")) || null,
+      import_template_id: selectedTemplate?.ok ? selectedTemplate.templateId : null,
+      template_version_id: selectedTemplate?.ok
+        ? selectedTemplate.templateVersionId
+        : null,
+      account_structure_id: selectedTemplate?.ok
+        ? selectedTemplate.accountStructureId
+        : null,
       fiscal_year: fiscalYear,
       period,
       batch_name: fileValue.name,
@@ -344,6 +394,10 @@ async function uploadSourceFileInternal(
       created_by: appUser.user_id,
       metadata: {
         raw_upload_only: true,
+        default_template_applied: Boolean(selectedTemplate?.ok),
+        selected_template_version_id: selectedTemplate?.ok
+          ? selectedTemplate.templateVersionId
+          : null,
         storage_bucket: RAW_UPLOADS_BUCKET,
         storage_path: storagePath,
         file_hash: fileHash,
@@ -376,6 +430,7 @@ async function uploadSourceFileInternal(
 
     revalidatePath("/imports");
     revalidatePath("/imports/new");
+    revalidatePath("/imports/trial-balance");
 
     return {
       status: "success",
@@ -408,6 +463,162 @@ async function uploadSourceFileInternal(
         : "Upload metadata could not be saved."
     );
   }
+}
+
+async function loadFiscalSetupForUpload({
+  adminClient,
+  fiscalPeriodId,
+  fiscalYear,
+  fiscalYearId,
+  organizationId,
+  period
+}: {
+  adminClient: ReturnType<typeof createAdminClient>;
+  fiscalPeriodId: string;
+  fiscalYear: number | null;
+  fiscalYearId: string;
+  organizationId: string;
+  period: number | null;
+}) {
+  if (fiscalYear === null || period === null) {
+    return {
+      ok: false as const,
+      message: "Fiscal year and period are required for trial balance uploads."
+    };
+  }
+
+  const result = await adminClient
+    .from("fiscal_periods")
+    .select("fiscal_period_id, fiscal_year_id, fiscal_year, period")
+    .eq("organization_id", organizationId)
+    .eq("fiscal_year", fiscalYear)
+    .eq("period", period)
+    .eq("active_status", "active")
+    .maybeSingle<{
+      fiscal_period_id: string;
+      fiscal_year_id: string;
+      fiscal_year: number;
+      period: number;
+    }>();
+
+  if (result.error) {
+    return {
+      ok: false as const,
+      message: result.error.message
+    };
+  }
+
+  if (!result.data) {
+    return {
+      ok: false as const,
+      message:
+        "Fiscal periods must be configured before importing trial balances."
+    };
+  }
+
+  if (fiscalYearId && fiscalYearId !== result.data.fiscal_year_id) {
+    return {
+      ok: false as const,
+      message: "Selected fiscal year does not match the configured fiscal period."
+    };
+  }
+
+  if (fiscalPeriodId && fiscalPeriodId !== result.data.fiscal_period_id) {
+    return {
+      ok: false as const,
+      message: "Selected fiscal period could not be verified."
+    };
+  }
+
+  return {
+    fiscalPeriodId: result.data.fiscal_period_id,
+    fiscalYearId: result.data.fiscal_year_id,
+    ok: true as const
+  };
+}
+
+async function loadUploadTemplateVersion({
+  accountStructureId,
+  adminClient,
+  importTypeId,
+  organizationId,
+  templateVersionId
+}: {
+  accountStructureId: string;
+  adminClient: ReturnType<typeof createAdminClient>;
+  importTypeId: string;
+  organizationId: string;
+  templateVersionId: string;
+}) {
+  const result = await adminClient
+    .from("import_template_versions")
+    .select(
+      `
+      template_version_id,
+      import_template_id,
+      account_structure_id,
+      version_status,
+      import_templates (
+        import_type_id
+      )
+    `
+    )
+    .eq("organization_id", organizationId)
+    .eq("template_version_id", templateVersionId)
+    .eq("version_status", "active")
+    .maybeSingle<{
+      account_structure_id: string | null;
+      import_template_id: string;
+      import_templates:
+        | { import_type_id: string }
+        | Array<{ import_type_id: string }>
+        | null;
+      template_version_id: string;
+      version_status: string;
+    }>();
+
+  if (result.error) {
+    return {
+      ok: false as const,
+      message: result.error.message
+    };
+  }
+
+  if (!result.data) {
+    return {
+      ok: false as const,
+      message: "Saved trial balance layout could not be found."
+    };
+  }
+
+  const template = Array.isArray(result.data.import_templates)
+    ? result.data.import_templates[0]
+    : result.data.import_templates;
+
+  if (template?.import_type_id !== importTypeId) {
+    return {
+      ok: false as const,
+      message: "Saved layout does not belong to the trial balance import type."
+    };
+  }
+
+  if (
+    accountStructureId &&
+    result.data.account_structure_id &&
+    accountStructureId !== result.data.account_structure_id
+  ) {
+    return {
+      ok: false as const,
+      message: "Saved layout account structure could not be verified."
+    };
+  }
+
+  return {
+    accountStructureId: result.data.account_structure_id,
+    ok: true as const,
+    templateId: result.data.import_template_id,
+    templateVersionId: result.data.template_version_id
+  };
 }
 
 function getStringValue(value: FormDataEntryValue | null) {

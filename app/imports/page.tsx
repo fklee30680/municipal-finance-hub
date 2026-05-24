@@ -193,15 +193,15 @@ export default async function ImportsPage({
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm leading-6 text-muted-foreground">
-                Trial balances now use the Import Workspace for upload,
-                template mapping, preview, validation, and posting actions.
-                Preview is still not validation or posting.
+                Trial balances use a dedicated monthly workflow for period
+                selection, upload, saved layout reuse, preview, validation, and
+                posting or replacement.
               </p>
               <Link
                 className="text-sm font-medium text-primary hover:underline"
-                href="/imports/new?importTypeCode=trial_balance"
+                href="/imports/trial-balance"
               >
-                Open Trial Balance Workspace
+                Open Trial Balance Import
               </Link>
             </CardContent>
           </Card>

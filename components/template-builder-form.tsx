@@ -42,6 +42,7 @@ export function TemplateBuilderForm({
   defaultImportTypeId,
   defaultTemplateDescription,
   defaultTemplateName,
+  hideImportTypeSelector = false,
   importTypes,
   mode,
   preview,
@@ -56,6 +57,7 @@ export function TemplateBuilderForm({
   defaultImportTypeId?: string;
   defaultTemplateDescription?: string;
   defaultTemplateName?: string;
+  hideImportTypeSelector?: boolean;
   importTypes: ImportTypeOption[];
   mode: "create" | "edit";
   preview: SourceFilePreview | null;
@@ -165,37 +167,45 @@ export function TemplateBuilderForm({
                   required={mode === "create"}
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="importTypeId">
-                  Import type
-                </label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  disabled={mode === "edit"}
-                  id="importTypeId"
+              {hideImportTypeSelector ? (
+                <input
                   name="importTypeId"
-                  onChange={(event) => setSelectedImportTypeId(event.target.value)}
-                  required
-                  value={selectedImportTypeId}
-                >
-                  <option value="">Select import type</option>
-                  {importTypes.map((importType) => (
-                    <option
-                      key={importType.import_type_id}
-                      value={importType.import_type_id}
-                    >
-                      {importType.import_type_name}
-                    </option>
-                  ))}
-                </select>
-                {mode === "edit" ? (
-                  <input
+                  type="hidden"
+                  value={defaultImportTypeId ?? selectedImportTypeId}
+                />
+              ) : (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="importTypeId">
+                    Import type
+                  </label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    disabled={mode === "edit"}
+                    id="importTypeId"
                     name="importTypeId"
-                    type="hidden"
-                    value={defaultImportTypeId ?? ""}
-                  />
-                ) : null}
-              </div>
+                    onChange={(event) => setSelectedImportTypeId(event.target.value)}
+                    required
+                    value={selectedImportTypeId}
+                  >
+                    <option value="">Select import type</option>
+                    {importTypes.map((importType) => (
+                      <option
+                        key={importType.import_type_id}
+                        value={importType.import_type_id}
+                      >
+                        {importType.import_type_name}
+                      </option>
+                    ))}
+                  </select>
+                  {mode === "edit" ? (
+                    <input
+                      name="importTypeId"
+                      type="hidden"
+                      value={defaultImportTypeId ?? ""}
+                    />
+                  ) : null}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

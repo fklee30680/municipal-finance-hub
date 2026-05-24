@@ -19,8 +19,6 @@ import {
 } from "@/lib/imports/transformations";
 import { getRequiredTargetFieldNames } from "@/lib/templates/target-fields";
 
-const MAX_PREVIEW_ROWS = 500;
-
 const amountFields = [
   "beginning_balance",
   "debits",
@@ -265,7 +263,6 @@ export async function generateTrialBalancePreview({
       template_name: template.template_name,
       template_version: templateVersion.version_number,
       preview_only: true,
-      max_preview_rows: MAX_PREVIEW_ROWS,
       sheet_name: sheetMapping.sheet_name
     }
   });
@@ -396,10 +393,6 @@ function buildPreviewRows({
   const previewRows: PreviewRowDraft[] = [];
 
   for (const [index, row] of dataRows.entries()) {
-    if (previewRows.length >= MAX_PREVIEW_ROWS) {
-      break;
-    }
-
     const rowValues = row.map(stringifyValue);
 
     if (rules.has("remove_blank_rows") && isBlankPreviewRow(rowValues)) {

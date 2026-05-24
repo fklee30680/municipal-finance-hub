@@ -6,6 +6,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { postingRoleNames, userHasAnyRole } from "@/lib/auth/permissions";
 
+const DATABASE_PAGE_SIZE = 1000;
+const INSERT_CHUNK_SIZE = 500;
+
 type ImportBatchRecord = {
   import_batch_id: string;
   organization_id: string;
@@ -941,29 +944,23 @@ async function insertTrialBalanceLines({
     updated_at: new Date().toISOString()
   }));
 
-  const result = await adminClient
-    .from("trial_balance_lines")
-    .insert(lineRows)
-    .select(
-      "trial_balance_line_id, full_account_number, fund_code, acfr_code, department_code, function_code, object_code"
-    )
-    .returns<
-      Array<{
-        trial_balance_line_id: string;
-        full_account_number: string;
-        fund_code: string | null;
-        acfr_code: string | null;
-        department_code: string | null;
-        function_code: string | null;
-        object_code: string | null;
-      }>
-    >();
+  for (const chunk of chunkArray(lineRows, INSERT_CHUNK_SIZE)) {
+    const result = await adminClient.from("trial_balance_lines").insert(chunk);
 
-  if (result.error) {
-    throw new Error(result.error.message);
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
   }
 
-  return result.data ?? [];
+  return lineRows.map((row) => ({
+    trial_balance_line_id: row.trial_balance_line_id,
+    full_account_number: row.full_account_number,
+    fund_code: row.fund_code,
+    acfr_code: row.acfr_code,
+    department_code: row.department_code,
+    function_code: row.function_code,
+    object_code: row.object_code
+  }));
 }
 
 async function insertTrialBalanceSegments({
@@ -1005,10 +1002,12 @@ async function insertTrialBalanceSegments({
     return;
   }
 
-  const result = await adminClient.from("trial_balance_line_segments").insert(segmentRows);
+  for (const chunk of chunkArray(segmentRows, INSERT_CHUNK_SIZE)) {
+    const result = await adminClient.from("trial_balance_line_segments").insert(chunk);
 
-  if (result.error) {
-    throw new Error(result.error.message);
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
   }
 }
 
@@ -1173,21 +1172,33 @@ async function loadPreviewRows({
   organizationId: string;
   previewRunId: string;
 }) {
-  const result = await adminClient
-    .from("import_preview_rows")
-    .select(
-      "preview_row_id, source_row_number, full_account_number, fund_code, acfr_code, department_code, function_code, object_code, account_name, beginning_balance, debits, credits, net_change, ending_balance"
-    )
-    .eq("organization_id", organizationId)
-    .eq("preview_run_id", previewRunId)
-    .order("source_row_number", { ascending: true })
-    .returns<PreviewRowRecord[]>();
+  const rows: PreviewRowRecord[] = [];
 
-  if (result.error) {
-    throw new Error(result.error.message);
+  for (let from = 0; ; from += DATABASE_PAGE_SIZE) {
+    const result = await adminClient
+      .from("import_preview_rows")
+      .select(
+        "preview_row_id, source_row_number, full_account_number, fund_code, acfr_code, department_code, function_code, object_code, account_name, beginning_balance, debits, credits, net_change, ending_balance"
+      )
+      .eq("organization_id", organizationId)
+      .eq("preview_run_id", previewRunId)
+      .order("source_row_number", { ascending: true })
+      .range(from, from + DATABASE_PAGE_SIZE - 1)
+      .returns<PreviewRowRecord[]>();
+
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+
+    const page = result.data ?? [];
+    rows.push(...page);
+
+    if (page.length < DATABASE_PAGE_SIZE) {
+      break;
+    }
   }
 
-  return result.data ?? [];
+  return rows;
 }
 
 async function loadCriticalExceptions({
@@ -1358,6 +1369,14 @@ function getSegmentValue(
 function toMoney(value: number | string | null) {
   const numeric = typeof value === "number" ? value : Number.parseFloat(value ?? "0");
   return Number.isNaN(numeric) ? 0 : numeric;
+}
+
+function chunkArray<T>(items: T[], chunkSize: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+  return chunks;
 }
 
 async function writeAuditLog({

@@ -10,6 +10,7 @@ import {
 } from "@/lib/imports/validation-rules";
 
 const BALANCE_TOLERANCE = 0.01;
+const DATABASE_PAGE_SIZE = 1000;
 
 export const trialBalanceValidationSignConvention = {
   balanceFormula: "beginning_balance + net_change = ending_balance",
@@ -1416,21 +1417,33 @@ async function loadPreviewRows({
   organizationId: string;
   previewRunId: string;
 }) {
-  const result = await adminClient
-    .from("import_preview_rows")
-    .select(
-      "preview_row_id, source_row_number, full_account_number, fund_code, acfr_code, department_code, function_code, object_code, account_name, beginning_balance, debits, credits, net_change, ending_balance, raw_row_json, transformed_row_json, has_issue"
-    )
-    .eq("organization_id", organizationId)
-    .eq("preview_run_id", previewRunId)
-    .order("source_row_number", { ascending: true })
-    .returns<PreviewRowRecord[]>();
+  const rows: PreviewRowRecord[] = [];
 
-  if (result.error) {
-    throw new Error(result.error.message);
+  for (let from = 0; ; from += DATABASE_PAGE_SIZE) {
+    const result = await adminClient
+      .from("import_preview_rows")
+      .select(
+        "preview_row_id, source_row_number, full_account_number, fund_code, acfr_code, department_code, function_code, object_code, account_name, beginning_balance, debits, credits, net_change, ending_balance, raw_row_json, transformed_row_json, has_issue"
+      )
+      .eq("organization_id", organizationId)
+      .eq("preview_run_id", previewRunId)
+      .order("source_row_number", { ascending: true })
+      .range(from, from + DATABASE_PAGE_SIZE - 1)
+      .returns<PreviewRowRecord[]>();
+
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+
+    const page = result.data ?? [];
+    rows.push(...page);
+
+    if (page.length < DATABASE_PAGE_SIZE) {
+      break;
+    }
   }
 
-  return result.data ?? [];
+  return rows;
 }
 
 async function loadPreviewIssues({
@@ -1442,20 +1455,33 @@ async function loadPreviewIssues({
   organizationId: string;
   previewRunId: string;
 }) {
-  const result = await adminClient
-    .from("import_preview_issues")
-    .select(
-      "preview_issue_id, preview_row_id, source_row_number, issue_code, issue_message, issue_severity, source_column_name, target_field_name, raw_value, transformed_value"
-    )
-    .eq("organization_id", organizationId)
-    .eq("preview_run_id", previewRunId)
-    .returns<PreviewIssueRecord[]>();
+  const issues: PreviewIssueRecord[] = [];
 
-  if (result.error) {
-    throw new Error(result.error.message);
+  for (let from = 0; ; from += DATABASE_PAGE_SIZE) {
+    const result = await adminClient
+      .from("import_preview_issues")
+      .select(
+        "preview_issue_id, preview_row_id, source_row_number, issue_code, issue_message, issue_severity, source_column_name, target_field_name, raw_value, transformed_value"
+      )
+      .eq("organization_id", organizationId)
+      .eq("preview_run_id", previewRunId)
+      .order("source_row_number", { ascending: true })
+      .range(from, from + DATABASE_PAGE_SIZE - 1)
+      .returns<PreviewIssueRecord[]>();
+
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+
+    const page = result.data ?? [];
+    issues.push(...page);
+
+    if (page.length < DATABASE_PAGE_SIZE) {
+      break;
+    }
   }
 
-  return result.data ?? [];
+  return issues;
 }
 
 async function loadFieldMappings({

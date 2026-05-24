@@ -27,6 +27,10 @@ type ImportBatchRecord = {
   fiscal_period_id: string | null;
   fiscal_year: number | null;
   period: number | null;
+  batch_status: string;
+  is_active_for_reporting: boolean;
+  reporting_status: string;
+  posted_at: string | null;
   metadata: Record<string, unknown> | null;
 };
 
@@ -192,6 +196,12 @@ export async function runTrialBalanceValidation({
     throw new Error("Validation is available only for trial_balance import batches.");
   }
 
+  if (isPostedImportBatch(batch)) {
+    throw new Error(
+      "This trial balance import has already been posted. Posted imports cannot be revalidated because that would change active reporting status. Use the controlled replacement workflow for this period instead."
+    );
+  }
+
   if (!batch.source_file_id) {
     throw new Error("This import batch does not have a source file.");
   }
@@ -289,6 +299,7 @@ export async function runTrialBalanceValidation({
     adminClient,
     batch,
     exceptions,
+    importBatchId,
     organizationId
   });
   carryForwardPreviewIssues({ exceptions, previewIssues });
@@ -715,11 +726,13 @@ async function validatePeriodConflict({
   adminClient,
   batch,
   exceptions,
+  importBatchId,
   organizationId
 }: {
   adminClient: SupabaseClient;
   batch: ImportBatchRecord;
   exceptions: ValidationExceptionDraft[];
+  importBatchId: string;
   organizationId: string;
 }) {
   if (!batch.fiscal_year || batch.period === null || batch.period === undefined) {
@@ -732,7 +745,8 @@ async function validatePeriodConflict({
     .eq("organization_id", organizationId)
     .eq("fiscal_year", batch.fiscal_year)
     .eq("period", batch.period)
-    .eq("is_active_for_reporting", true);
+    .eq("is_active_for_reporting", true)
+    .neq("import_batch_id", importBatchId);
 
   if (conflictResult.error) {
     throw new Error(conflictResult.error.message);
@@ -1257,6 +1271,16 @@ function previewSeverityToValidationSeverity(
   return "warning";
 }
 
+function isPostedImportBatch(batch: ImportBatchRecord) {
+  return (
+    batch.batch_status === "posted" ||
+    batch.batch_status === "posted_with_exceptions" ||
+    batch.is_active_for_reporting ||
+    batch.reporting_status === "included" ||
+    Boolean(batch.posted_at)
+  );
+}
+
 async function loadImportBatch({
   adminClient,
   importBatchId,
@@ -1269,7 +1293,7 @@ async function loadImportBatch({
   const result = await adminClient
     .from("import_batches")
     .select(
-      "import_batch_id, organization_id, import_type_id, source_file_id, template_version_id, account_structure_id, fiscal_year_id, fiscal_period_id, fiscal_year, period, metadata"
+      "import_batch_id, organization_id, import_type_id, source_file_id, template_version_id, account_structure_id, fiscal_year_id, fiscal_period_id, fiscal_year, period, batch_status, is_active_for_reporting, reporting_status, posted_at, metadata"
     )
     .eq("organization_id", organizationId)
     .eq("import_batch_id", importBatchId)

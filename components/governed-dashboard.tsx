@@ -71,127 +71,120 @@ export function DashboardFilterBar({
         <CardTitle>Dashboard Filters</CardTitle>
       </CardHeader>
       <CardContent>
-        <form className="grid gap-4 md:grid-cols-3 xl:grid-cols-4" method="get">
-          <Select label="Fiscal year" name="fiscalYear" value={String(selection.fiscalYear)}>
-            {fiscalYears.length === 0 ? (
-              <option value={selection.fiscalYear}>No values available</option>
-            ) : (
-              fiscalYears.map((year) => (
-                <option key={year} value={year}>
-                  FY {year}
-                </option>
-              ))
-            )}
-          </Select>
-          <Select label="Period from" name="periodFrom" value={String(selection.periodFrom)}>
-            {periods.map((period) => (
-              <option key={period.period} value={period.period}>
-                Period {period.period} - {period.period_name}
-              </option>
-            ))}
-          </Select>
-          <Select label="Period to" name="periodTo" value={String(selection.periodTo)}>
-            {periods.map((period) => (
-              <option key={period.period} value={period.period}>
-                Period {period.period} - {period.period_name}
-              </option>
-            ))}
-          </Select>
-          <Select label="Time view" name="timeView" value={selection.timeView}>
-            <option value="current_period">Current period</option>
-            <option value="ytd">YTD</option>
-            <option value="selected_range">Selected range</option>
-          </Select>
-          <Select
-            label="Reporting scope"
-            name="reportingScope"
-            value={selection.reportingScope}
-          >
-            <option value="standard">Standard Reporting</option>
-            <option value="cash_reconciliation">
-              Include Pooled Cash / Reconciliation
-            </option>
-            <option value="all_active">All Active Funds</option>
-          </Select>
-          <Select label="Fund" name="fund" value={selection.fund}>
-            <option value="">All funds</option>
-            {options.funds.map((fund) => (
-              <option key={fund.fund_code} value={fund.fund_code}>
-                {fund.fund_code} - {fund.fund_name}
-              </option>
-            ))}
-          </Select>
-          <Select label="Fund group" name="fundGroup" value={selection.fundGroup}>
-            <option value="">All groups</option>
-            {fundGroups.map((group) => (
-              <option key={group} value={group}>
-                {group}
-              </option>
-            ))}
-          </Select>
-          <Select label="Department" name="department" value={selection.department}>
-            <option value="">All departments</option>
-            {options.departments.map((department) => (
-              <option key={department.code} value={department.code}>
-                {department.code} - {department.name}
-              </option>
-            ))}
-          </Select>
-          <Select label="Function" name="functionCode" value={selection.functionCode}>
-            <option value="">All functions</option>
-            {options.functions.map((functionRow) => (
-              <option key={functionRow.code} value={functionRow.code}>
-                {functionRow.code} - {functionRow.name}
-              </option>
-            ))}
-          </Select>
-          <Select label="ACFR" name="acfr" value={selection.acfr}>
-            <option value="">All ACFR</option>
-            {options.acfr.map((row) => (
-              <option key={row.code} value={row.code}>
-                {row.code} - {row.name}
-              </option>
-            ))}
-          </Select>
-          <Select label="Account type" name="accountType" value={selection.accountType}>
-            <option value="">All account types</option>
-            {options.accountTypes.map((accountType) => (
-              <option key={accountType} value={accountType}>
-                {titleize(accountType)}
-              </option>
-            ))}
-          </Select>
-          <Select label="Statement line" name="statementLine" value={selection.statementLine}>
-            <option value="">All lines</option>
-            {options.statementLines.map((line) => (
-              <option key={line} value={line}>
-                {line}
-              </option>
-            ))}
-          </Select>
-          <Select
-            label="Exception severity"
-            name="exceptionSeverity"
-            value={selection.exceptionSeverity}
-          >
-            <option value="">All severities</option>
-            <option value="Critical">Critical</option>
-            <option value="High">High</option>
-            <option value="Warning">Warning</option>
-            <option value="Info">Info</option>
-          </Select>
-          <Select label="Top N" name="topN" value={String(selection.topN)}>
-            {[5, 10, 20, 50].map((value) => (
-              <option key={value} value={value}>
-                Top {value}
-              </option>
-            ))}
-          </Select>
-          <Select label="Sort" name="sort" value={selection.sort}>
-            <option value="largest_amount">Largest dollar variance</option>
-            <option value="largest_percent">Largest percent variance</option>
-          </Select>
-          <div className="flex items-end">
+        <form className="space-y-5" method="get">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)]">
+            <FilterSection title="Period and scope">
+              <Select label="Fiscal year" name="fiscalYear" value={String(selection.fiscalYear)}>
+                {fiscalYears.length === 0 ? (
+                  <option value={selection.fiscalYear}>No values available</option>
+                ) : (
+                  fiscalYears.map((year) => (
+                    <option key={year} value={year}>
+                      FY {year}
+                    </option>
+                  ))
+                )}
+              </Select>
+              <Select label="Period from" name="periodFrom" value={String(selection.periodFrom)}>
+                {periods.map((period) => (
+                  <option key={period.period} value={period.period}>
+                    Period {period.period} - {period.period_name}
+                  </option>
+                ))}
+              </Select>
+              <Select label="Period to" name="periodTo" value={String(selection.periodTo)}>
+                {periods.map((period) => (
+                  <option key={period.period} value={period.period}>
+                    Period {period.period} - {period.period_name}
+                  </option>
+                ))}
+              </Select>
+              <Select label="Time view" name="timeView" value={selection.timeView}>
+                <option value="current_period">Current period</option>
+                <option value="ytd">YTD</option>
+                <option value="selected_range">Selected range</option>
+              </Select>
+              <div className="md:col-span-2">
+                <Select
+                  label="Reporting scope"
+                  name="reportingScope"
+                  value={selection.reportingScope}
+                >
+                  <option value="standard">Standard Reporting</option>
+                  <option value="cash_reconciliation">
+                    Include Pooled Cash / Reconciliation
+                  </option>
+                  <option value="all_active">All Active Funds</option>
+                </Select>
+              </div>
+            </FilterSection>
+
+            <FilterSection title="Reference dimensions">
+              <Select label="Fund" name="fund" value={selection.fund}>
+                <option value="">All funds</option>
+                {options.funds.map((fund) => (
+                  <option key={fund.fund_code} value={fund.fund_code}>
+                    {fund.fund_code} - {fund.fund_name}
+                  </option>
+                ))}
+              </Select>
+              <Select label="Fund group" name="fundGroup" value={selection.fundGroup}>
+                <option value="">All groups</option>
+                {fundGroups.map((group) => (
+                  <option key={group} value={group}>
+                    {group}
+                  </option>
+                ))}
+              </Select>
+              <Select label="Department" name="department" value={selection.department}>
+                <option value="">All departments</option>
+                {options.departments.map((department) => (
+                  <option key={department.code} value={department.code}>
+                    {department.code} - {department.name}
+                  </option>
+                ))}
+              </Select>
+              <Select label="Function" name="functionCode" value={selection.functionCode}>
+                <option value="">All functions</option>
+                {options.functions.map((functionRow) => (
+                  <option key={functionRow.code} value={functionRow.code}>
+                    {functionRow.code} - {functionRow.name}
+                  </option>
+                ))}
+              </Select>
+              <Select label="ACFR" name="acfr" value={selection.acfr}>
+                <option value="">All ACFR</option>
+                {options.acfr.map((row) => (
+                  <option key={row.code} value={row.code}>
+                    {row.code} - {row.name}
+                  </option>
+                ))}
+              </Select>
+              <Select label="Account type" name="accountType" value={selection.accountType}>
+                <option value="">All account types</option>
+                {options.accountTypes.map((accountType) => (
+                  <option key={accountType} value={accountType}>
+                    {titleize(accountType)}
+                  </option>
+                ))}
+              </Select>
+            </FilterSection>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <FilterSection title="Display">
+              <Select label="Top N" name="topN" value={String(selection.topN)}>
+                {[5, 10, 20, 50].map((value) => (
+                  <option key={value} value={value}>
+                    Top {value}
+                  </option>
+                ))}
+              </Select>
+              <Select label="Sort" name="sort" value={selection.sort}>
+                <option value="largest_amount">Largest dollar variance</option>
+                <option value="largest_percent">Largest percent variance</option>
+              </Select>
+            </FilterSection>
             <button className="h-10 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
               Apply Filters
             </button>
@@ -568,6 +561,23 @@ function Select({
   );
 }
 
+function FilterSection({
+  children,
+  title
+}: {
+  children: ReactNode;
+  title: string;
+}) {
+  return (
+    <fieldset className="grid gap-4 rounded-md border border-border bg-muted/30 p-4 md:grid-cols-2">
+      <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </legend>
+      {children}
+    </fieldset>
+  );
+}
+
 function Info({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="space-y-1">
@@ -705,8 +715,6 @@ function formatActiveFilters(selection: DashboardSelection) {
     selection.functionCode ? `Function ${selection.functionCode}` : null,
     selection.acfr ? `ACFR ${selection.acfr}` : null,
     selection.accountType ? `Account Type ${titleize(selection.accountType)}` : null,
-    selection.statementLine ? `Statement Line ${selection.statementLine}` : null,
-    selection.exceptionSeverity ? `Exception Severity ${selection.exceptionSeverity}` : null,
     selection.topN !== 10 ? `Top ${selection.topN}` : null,
     selection.sort !== "largest_amount" ? `Sort ${titleize(selection.sort)}` : null
   ].filter(Boolean);

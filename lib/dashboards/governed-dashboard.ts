@@ -361,7 +361,7 @@ function buildSelection({
     acfr: searchParams.acfr ?? "",
     accountType: searchParams.accountType ?? "",
     department: searchParams.department ?? "",
-    exceptionSeverity: searchParams.exceptionSeverity ?? "",
+    exceptionSeverity: "",
     fiscalYear,
     fund: searchParams.fund ?? "",
     fundGroup: searchParams.fundGroup ?? "",
@@ -374,7 +374,7 @@ function buildSelection({
       "standard"
     ),
     sort: searchParams.sort ?? "largest_amount",
-    statementLine: searchParams.statementLine ?? "",
+    statementLine: "",
     timeView,
     topN: Math.min(Math.max(integer(searchParams.topN) ?? 10, 5), 50)
   };

@@ -281,6 +281,8 @@ export async function updateFundManualAction(
     });
 
     revalidatePath("/imports/funds");
+    revalidatePath("/reference-data/funds");
+    revalidatePath("/reference-data");
     revalidatePath("/analysis/calculation-runs");
 
     return {
@@ -290,6 +292,245 @@ export async function updateFundManualAction(
   } catch (error) {
     return manualUpdateError(
       error instanceof Error ? error.message : "Fund update failed."
+    );
+  }
+}
+
+export async function createFundManualAction(
+  _previousState: FundManualUpdateState,
+  formData: FormData
+): Promise<FundManualUpdateState> {
+  try {
+    const authUser = await requireUser();
+    const adminClient = createAdminClient();
+    const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
+    const fundCode = getStringValue(formData.get("fundCode"));
+    const fundName = getStringValue(formData.get("fundName"));
+
+    if (!fundCode) {
+      return manualUpdateError("Fund Code is required.");
+    }
+
+    if (!fundName) {
+      return manualUpdateError("Fund Name is required.");
+    }
+
+    const existingResult = await adminClient
+      .from("funds")
+      .select("fund_id, active_status")
+      .eq("organization_id", appUser.organization_id)
+      .eq("fund_code", fundCode)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingResult.error) {
+      return manualUpdateError(existingResult.error.message);
+    }
+
+    if (existingResult.data) {
+      return manualUpdateError(
+        `Fund ${fundCode} already exists. Edit or reactivate the existing fund instead.`
+      );
+    }
+
+    const createPayload = {
+      active_status:
+        getStringValue(formData.get("activeStatus")) === "inactive"
+          ? "inactive"
+          : "active",
+      created_by: appUser.user_id,
+      effective_end_date: getDateOrNull(
+        formData.get("effectiveEndDate"),
+        "Effective End"
+      ),
+      effective_start_date: getDateOrNull(
+        formData.get("effectiveStartDate"),
+        "Effective Start"
+      ),
+      fund_code: fundCode,
+      fund_group: getNullableString(formData.get("fundGroup")),
+      fund_name: fundName,
+      fund_type: getNullableString(formData.get("fundType")),
+      include_in_cash_reconciliation: getBooleanSelectValue(
+        formData.get("includeInCashReconciliation") ?? "false",
+        "Include In Cash Reconciliation"
+      ),
+      include_in_standard_reporting: getBooleanSelectValue(
+        formData.get("includeInStandardReporting") ?? "true",
+        "Include In Standard Reporting"
+      ),
+      major_fund_flag: getAllowedNullableValue({
+        allowedValues: ["yes", "no"],
+        fieldLabel: "Major Fund",
+        value: getStringValue(formData.get("majorFundFlag"))
+      }),
+      organization_id: appUser.organization_id,
+      reporting_exclusion_reason: getNullableString(
+        formData.get("reportingExclusionReason")
+      ),
+      reporting_model: getAllowedNullableValue({
+        allowedValues: [
+          "governmental",
+          "proprietary",
+          "fiduciary",
+          "component_unit",
+          "other"
+        ],
+        fieldLabel: "Reporting Model",
+        value: getStringValue(formData.get("reportingModel"))
+      }),
+      reporting_treatment: getAllowedValue({
+        allowedValues: [
+          "reportable",
+          "pooled_cash",
+          "reconciliation_only",
+          "clearing",
+          "elimination",
+          "internal_service",
+          "fiduciary_excluded",
+          "other_excluded"
+        ],
+        fieldLabel: "Reporting Treatment",
+        value:
+          getStringValue(formData.get("reportingTreatment")) || "reportable"
+      }),
+      source_method: "manual",
+      updated_at: new Date().toISOString(),
+      updated_by: appUser.user_id
+    };
+
+    if (
+      createPayload.effective_start_date &&
+      createPayload.effective_end_date &&
+      createPayload.effective_end_date < createPayload.effective_start_date
+    ) {
+      return manualUpdateError("Effective End cannot be before Effective Start.");
+    }
+
+    const createResult = await adminClient
+      .from("funds")
+      .insert(createPayload)
+      .select(
+        "fund_id, fund_code, fund_name, fund_type, reporting_model, fund_group, major_fund_flag, reporting_treatment, include_in_standard_reporting, include_in_cash_reconciliation, reporting_exclusion_reason, active_status, effective_start_date, effective_end_date"
+      )
+      .single();
+
+    if (createResult.error) {
+      return manualUpdateError(createResult.error.message);
+    }
+
+    await adminClient.from("audit_logs").insert({
+      action_type: "fund_manual_create",
+      actor_user_id: appUser.user_id,
+      after_payload: createResult.data,
+      entity_id: createResult.data.fund_id,
+      entity_table: "funds",
+      metadata: {
+        route: "/reference-data/funds",
+        created_fields: Object.keys(createPayload)
+      },
+      organization_id: appUser.organization_id
+    });
+
+    revalidatePath("/reference-data/funds");
+    revalidatePath("/reference-data");
+    revalidatePath("/imports/funds");
+    revalidatePath("/analysis/calculation-runs");
+
+    return {
+      message: `Fund ${fundCode} created.`,
+      status: "success"
+    };
+  } catch (error) {
+    return manualUpdateError(
+      error instanceof Error ? error.message : "Fund create failed."
+    );
+  }
+}
+
+export async function setFundManualStatusAction(
+  _previousState: FundManualUpdateState,
+  formData: FormData
+): Promise<FundManualUpdateState> {
+  try {
+    const authUser = await requireUser();
+    const adminClient = createAdminClient();
+    const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
+    const fundId = getStringValue(formData.get("fundId"));
+    const targetStatus = getStringValue(formData.get("targetStatus"));
+
+    if (!fundId) {
+      return manualUpdateError("Fund ID was not provided.");
+    }
+
+    if (!["active", "inactive"].includes(targetStatus)) {
+      return manualUpdateError("Target status is not valid.");
+    }
+
+    const beforeResult = await adminClient
+      .from("funds")
+      .select(
+        "fund_id, fund_code, fund_name, reporting_model, fund_group, major_fund_flag, reporting_treatment, include_in_standard_reporting, include_in_cash_reconciliation, reporting_exclusion_reason, active_status, effective_start_date, effective_end_date"
+      )
+      .eq("organization_id", appUser.organization_id)
+      .eq("fund_id", fundId)
+      .maybeSingle();
+
+    if (beforeResult.error) {
+      return manualUpdateError(beforeResult.error.message);
+    }
+
+    if (!beforeResult.data) {
+      return manualUpdateError("Fund could not be found.");
+    }
+
+    const updateResult = await adminClient
+      .from("funds")
+      .update({
+        active_status: targetStatus,
+        source_method: "manual",
+        updated_at: new Date().toISOString(),
+        updated_by: appUser.user_id
+      })
+      .eq("organization_id", appUser.organization_id)
+      .eq("fund_id", fundId)
+      .select(
+        "fund_id, fund_code, fund_name, reporting_model, fund_group, major_fund_flag, reporting_treatment, include_in_standard_reporting, include_in_cash_reconciliation, reporting_exclusion_reason, active_status, effective_start_date, effective_end_date"
+      )
+      .single();
+
+    if (updateResult.error) {
+      return manualUpdateError(updateResult.error.message);
+    }
+
+    const action = targetStatus === "active" ? "reactivate" : "deactivate";
+
+    await adminClient.from("audit_logs").insert({
+      action_type: `fund_manual_${action}`,
+      actor_user_id: appUser.user_id,
+      after_payload: updateResult.data,
+      before_payload: beforeResult.data,
+      entity_id: fundId,
+      entity_table: "funds",
+      metadata: {
+        route: "/reference-data/funds",
+        target_status: targetStatus
+      },
+      organization_id: appUser.organization_id
+    });
+
+    revalidatePath("/reference-data/funds");
+    revalidatePath("/reference-data");
+    revalidatePath("/imports/funds");
+    revalidatePath("/analysis/calculation-runs");
+
+    return {
+      message: `Fund ${beforeResult.data.fund_code} ${targetStatus === "active" ? "reactivated" : "deactivated"}.`,
+      status: "success"
+    };
+  } catch (error) {
+    return manualUpdateError(
+      error instanceof Error ? error.message : "Fund status update failed."
     );
   }
 }

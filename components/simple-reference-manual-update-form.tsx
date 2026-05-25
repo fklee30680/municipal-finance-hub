@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, X } from "lucide-react";
+import { Ban, Pencil, Plus, RotateCcw, X } from "lucide-react";
 import {
   type Ref,
   useActionState,
@@ -11,13 +11,15 @@ import {
 import { useRouter } from "next/navigation";
 
 import {
+  createSimpleReferenceManualAction,
+  setSimpleReferenceManualStatusAction,
   updateSimpleReferenceManualAction,
   type SimpleReferenceManualUpdateState
 } from "@/app/imports/reference-actions";
 import { Button } from "@/components/ui/button";
 import type { SimpleReferenceImportConfig } from "@/lib/imports/simple-reference-import-config";
 
-type ReferenceRow = Record<string, string | number | null>;
+type ReferenceRow = Record<string, boolean | string | number | null>;
 
 const initialState: SimpleReferenceManualUpdateState = {
   message: null,
@@ -138,6 +140,193 @@ export function SimpleReferenceManualUpdateForm({
   );
 }
 
+export function SimpleReferenceManualCreateForm({
+  config,
+  defaultCode = "",
+  initialOpen = false
+}: {
+  config: SimpleReferenceImportConfig;
+  defaultCode?: string;
+  initialOpen?: boolean;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+  const titleId = useId();
+  const [state, formAction, pending] = useActionState(
+    createSimpleReferenceManualAction,
+    initialState
+  );
+
+  useEffect(() => {
+    if (initialOpen && dialogRef.current && !dialogRef.current.open) {
+      dialogRef.current.showModal();
+      window.requestAnimationFrame(() => codeRef.current?.focus());
+    }
+  }, [initialOpen]);
+
+  useEffect(() => {
+    if (state.status === "success") {
+      dialogRef.current?.close();
+      router.refresh();
+    }
+  }, [router, state.status]);
+
+  return (
+    <>
+      <button
+        className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring"
+        onClick={() => {
+          dialogRef.current?.showModal();
+          window.requestAnimationFrame(() => codeRef.current?.focus());
+        }}
+        type="button"
+      >
+        <Plus aria-hidden="true" className="h-4 w-4" />
+        Add {getSingularTitle(config.tableTitle)}
+      </button>
+
+      <dialog
+        aria-labelledby={titleId}
+        className="w-[min(760px,calc(100vw-32px))] rounded-md border border-border bg-background p-0 text-foreground shadow-xl backdrop:bg-black/40"
+        ref={dialogRef}
+      >
+        <form method="dialog">
+          <button
+            aria-label={`Close ${config.tableTitle} create form`}
+            className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+            type="submit"
+          >
+            <X aria-hidden="true" className="h-4 w-4" />
+          </button>
+        </form>
+
+        <div className="border-b border-border px-6 py-5">
+          <p className="text-xs font-medium uppercase tracking-wide text-primary">
+            Manual {config.tableTitle} Create
+          </p>
+          <h3 className="mt-1 text-xl font-semibold text-foreground" id={titleId}>
+            Add {getSingularTitle(config.tableTitle)}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Create one active reference row without preparing an import file. Code
+            values are preserved as text, including leading zeros.
+          </p>
+        </div>
+
+        <form action={formAction} className="space-y-5 px-6 py-5">
+          <input name="route" type="hidden" value={config.route} />
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2 text-sm font-medium text-foreground">
+              {config.codeLabel}
+              <input
+                className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                defaultValue={defaultCode}
+                name="code"
+                ref={codeRef}
+                required
+                type="text"
+              />
+            </label>
+
+            <label className="space-y-2 text-sm font-medium text-foreground">
+              {getReferenceNameLabel(config)}
+              <input
+                className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                name="name"
+                required
+                type="text"
+              />
+            </label>
+
+            {config.manualEditableFields.map((field) => (
+              <EditableField
+                defaultValue={field.dbField === "active_status" ? "active" : null}
+                field={field}
+                key={field.dbField}
+              />
+            ))}
+          </div>
+
+          <div className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
+            After adding reference data, rerun validation or calculation so new
+            results use the updated setup data.
+          </div>
+
+          {state.message ? (
+            <p
+              className={
+                state.status === "error"
+                  ? "rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  : "rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground"
+              }
+            >
+              {state.message}
+            </p>
+          ) : null}
+
+          <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
+            <button
+              className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              onClick={() => dialogRef.current?.close()}
+              type="button"
+            >
+              Cancel
+            </button>
+            <Button disabled={pending} type="submit">
+              {pending ? "Saving..." : "Save and Close"}
+            </Button>
+          </div>
+        </form>
+      </dialog>
+    </>
+  );
+}
+
+export function SimpleReferenceStatusAction({
+  config,
+  row
+}: {
+  config: SimpleReferenceImportConfig;
+  row: ReferenceRow;
+}) {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(
+    setSimpleReferenceManualStatusAction,
+    initialState
+  );
+  const isInactive = String(row.active_status ?? "") === "inactive";
+  const targetStatus = isInactive ? "active" : "inactive";
+  const label = isInactive ? "Reactivate" : "Deactivate";
+  const Icon = isInactive ? RotateCcw : Ban;
+
+  useEffect(() => {
+    if (state.status === "success") {
+      router.refresh();
+    }
+  }, [router, state.status]);
+
+  return (
+    <form action={formAction} className="space-y-1">
+      <input name="route" type="hidden" value={config.route} />
+      <input name="rowId" type="hidden" value={String(row[config.idField] ?? "")} />
+      <input name="targetStatus" type="hidden" value={targetStatus} />
+      <button
+        className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+        disabled={pending}
+        type="submit"
+      >
+        <Icon aria-hidden="true" className="h-3.5 w-3.5" />
+        {pending ? "Saving..." : label}
+      </button>
+      {state.status === "error" && state.message ? (
+        <p className="max-w-40 text-xs text-destructive">{state.message}</p>
+      ) : null}
+    </form>
+  );
+}
+
 function EditableField({
   defaultValue,
   field,
@@ -222,4 +411,16 @@ function getSelectOptions({
     },
     ...options
   ];
+}
+
+function getReferenceNameLabel(config: SimpleReferenceImportConfig) {
+  if (config.nameField === "acfr_name") return "ACFR Name";
+  return `${getSingularTitle(config.tableTitle)} Name`;
+}
+
+function getSingularTitle(title: string) {
+  if (title === "ACFR Mappings") return "ACFR Mapping";
+  if (title.endsWith("ies")) return `${title.slice(0, -3)}y`;
+  if (title.endsWith("s")) return title.slice(0, -1);
+  return title;
 }

@@ -1,12 +1,21 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { BarChart3, Calculator, FileText, Home, Settings, Upload } from "lucide-react";
+import {
+  BarChart3,
+  Calculator,
+  Database,
+  FileText,
+  Home,
+  Settings,
+  Upload
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const navigation = [
   { href: "/", label: "Home", icon: Home },
   { href: "/imports", label: "Imports", icon: Upload },
+  { href: "/reference-data", label: "Reference Data", icon: Database },
   { href: "/analysis/calculation-runs", label: "Analysis", icon: Calculator },
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/reports", label: "Reports", icon: FileText },

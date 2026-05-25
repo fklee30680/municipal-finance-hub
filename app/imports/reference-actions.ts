@@ -179,6 +179,8 @@ export async function updateSimpleReferenceManualAction(
     });
 
     revalidatePath(`/imports/${config.route}`);
+    revalidatePath(`/reference-data/${config.route}`);
+    revalidatePath("/reference-data");
     revalidatePath("/imports/reference");
     revalidatePath("/analysis/calculation-runs");
 
@@ -191,6 +193,210 @@ export async function updateSimpleReferenceManualAction(
       error instanceof Error
         ? error.message
         : `${config.tableTitle} manual update failed.`
+    );
+  }
+}
+
+export async function createSimpleReferenceManualAction(
+  _previousState: SimpleReferenceManualUpdateState,
+  formData: FormData
+): Promise<SimpleReferenceManualUpdateState> {
+  const route = getStringValue(formData.get("route"));
+  const config = getSimpleReferenceImportConfig(route);
+
+  if (!config) {
+    return manualUpdateError("This reference type is not supported.");
+  }
+
+  try {
+    const authUser = await requireUser();
+    const adminClient = createAdminClient();
+    const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
+    const code = getStringValue(formData.get("code"));
+    const name = getStringValue(formData.get("name"));
+
+    if (!code) {
+      return manualUpdateError(`${config.codeLabel} is required.`);
+    }
+
+    if (!name) {
+      return manualUpdateError("Name is required.");
+    }
+
+    const existingResult = await adminClient
+      .from(config.targetTable)
+      .select(`${config.idField}, active_status`)
+      .eq("organization_id", appUser.organization_id)
+      .eq(config.codeField, code)
+      .limit(1)
+      .maybeSingle<Record<string, unknown>>();
+
+    if (existingResult.error) {
+      return manualUpdateError(existingResult.error.message);
+    }
+
+    if (existingResult.data) {
+      return manualUpdateError(
+        `${config.codeLabel} ${code} already exists. Edit or reactivate the existing row instead.`
+      );
+    }
+
+    const createPayload = buildManualCreatePayload({
+      code,
+      config,
+      formData,
+      name,
+      userId: appUser.user_id,
+      organizationId: appUser.organization_id
+    });
+    const effectiveStart = String(createPayload.effective_start_date ?? "");
+    const effectiveEnd = String(createPayload.effective_end_date ?? "");
+
+    if (effectiveStart && effectiveEnd && effectiveEnd < effectiveStart) {
+      return manualUpdateError("Effective End cannot be before Effective Start.");
+    }
+
+    const selectedFields = getManualUpdateSelectFields(config);
+    const createResult = await adminClient
+      .from(config.targetTable)
+      .insert(createPayload)
+      .select(selectedFields)
+      .single<Record<string, unknown>>();
+
+    if (createResult.error) {
+      return manualUpdateError(createResult.error.message);
+    }
+
+    await adminClient.from("audit_logs").insert({
+      action_type: `${config.auditPrefix}_manual_create`,
+      actor_user_id: appUser.user_id,
+      after_payload: createResult.data,
+      entity_id: String(createResult.data[config.idField] ?? ""),
+      entity_table: config.targetTable,
+      metadata: {
+        route: `/reference-data/${config.route}`,
+        created_fields: Object.keys(createPayload)
+      },
+      organization_id: appUser.organization_id
+    });
+
+    revalidatePath(`/reference-data/${config.route}`);
+    revalidatePath("/reference-data");
+    revalidatePath(`/imports/${config.route}`);
+    revalidatePath("/analysis/calculation-runs");
+
+    return {
+      message: `${config.tableTitle} ${code} created.`,
+      status: "success"
+    };
+  } catch (error) {
+    return manualUpdateError(
+      error instanceof Error
+        ? error.message
+        : `${config.tableTitle} manual create failed.`
+    );
+  }
+}
+
+export async function setSimpleReferenceManualStatusAction(
+  _previousState: SimpleReferenceManualUpdateState,
+  formData: FormData
+): Promise<SimpleReferenceManualUpdateState> {
+  const route = getStringValue(formData.get("route"));
+  const config = getSimpleReferenceImportConfig(route);
+
+  if (!config) {
+    return manualUpdateError("This reference type is not supported.");
+  }
+
+  try {
+    const authUser = await requireUser();
+    const adminClient = createAdminClient();
+    const appUser = await ensureAppUserForAuthUser(adminClient, authUser);
+    const rowId = getStringValue(formData.get("rowId"));
+    const targetStatus = getStringValue(formData.get("targetStatus"));
+
+    if (!rowId) {
+      return manualUpdateError("Reference row ID was not provided.");
+    }
+
+    if (!["active", "inactive"].includes(targetStatus)) {
+      return manualUpdateError("Target status is not valid.");
+    }
+
+    const selectedFields = getManualUpdateSelectFields(config);
+    const beforeResult = await adminClient
+      .from(config.targetTable)
+      .select(selectedFields)
+      .eq("organization_id", appUser.organization_id)
+      .eq(config.idField, rowId)
+      .maybeSingle<Record<string, unknown>>();
+
+    if (beforeResult.error) {
+      return manualUpdateError(beforeResult.error.message);
+    }
+
+    if (!beforeResult.data) {
+      return manualUpdateError(`${config.tableTitle} row could not be found.`);
+    }
+
+    const changeReason = getStringValue(formData.get("changeReason"));
+    const updatePayload: Record<string, unknown> = {
+      active_status: targetStatus,
+      source_method: "manual",
+      updated_at: new Date().toISOString(),
+      updated_by: appUser.user_id
+    };
+
+    if (
+      changeReason &&
+      config.manualEditableFields.some((field) => field.dbField === "change_reason")
+    ) {
+      updatePayload.change_reason = changeReason;
+    }
+
+    const updateResult = await adminClient
+      .from(config.targetTable)
+      .update(updatePayload)
+      .eq("organization_id", appUser.organization_id)
+      .eq(config.idField, rowId)
+      .select(selectedFields)
+      .single<Record<string, unknown>>();
+
+    if (updateResult.error) {
+      return manualUpdateError(updateResult.error.message);
+    }
+
+    const action = targetStatus === "active" ? "reactivate" : "deactivate";
+
+    await adminClient.from("audit_logs").insert({
+      action_type: `${config.auditPrefix}_manual_${action}`,
+      actor_user_id: appUser.user_id,
+      after_payload: updateResult.data,
+      before_payload: beforeResult.data,
+      entity_id: rowId,
+      entity_table: config.targetTable,
+      metadata: {
+        route: `/reference-data/${config.route}`,
+        target_status: targetStatus
+      },
+      organization_id: appUser.organization_id
+    });
+
+    revalidatePath(`/reference-data/${config.route}`);
+    revalidatePath("/reference-data");
+    revalidatePath(`/imports/${config.route}`);
+    revalidatePath("/analysis/calculation-runs");
+
+    return {
+      message: `${config.tableTitle} ${beforeResult.data[config.codeField] ?? ""} ${targetStatus === "active" ? "reactivated" : "deactivated"}.`,
+      status: "success"
+    };
+  } catch (error) {
+    return manualUpdateError(
+      error instanceof Error
+        ? error.message
+        : `${config.tableTitle} status update failed.`
     );
   }
 }
@@ -308,6 +514,46 @@ function buildManualUpdatePayload({
   }
 
   return payload;
+}
+
+function buildManualCreatePayload({
+  code,
+  config,
+  formData,
+  name,
+  organizationId,
+  userId
+}: {
+  code: string;
+  config: NonNullable<ReturnType<typeof getSimpleReferenceImportConfig>>;
+  formData: FormData;
+  name: string;
+  organizationId: string;
+  userId: string;
+}): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    [config.codeField]: code,
+    [config.nameField]: name,
+    active_status: "active",
+    created_by: userId,
+    organization_id: organizationId,
+    source_method: "manual",
+    updated_at: new Date().toISOString(),
+    updated_by: userId
+  };
+
+  const manualPayload = buildManualUpdatePayload({
+    beforeRow: {},
+    fields: config.manualEditableFields,
+    formData,
+    userId
+  });
+
+  return {
+    ...payload,
+    ...manualPayload,
+    active_status: String(manualPayload.active_status ?? "active") || "active"
+  };
 }
 
 function getDateOrNull(value: string, fieldLabel: string) {

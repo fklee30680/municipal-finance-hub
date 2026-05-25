@@ -552,6 +552,14 @@ export default async function TrialBalanceValidationPage({
                     Go to Fiscal Year Setup
                   </Link>
                 ) : null}
+                {rootCauseSummaries.some((summary) => summary.group === "reference_mapping") ? (
+                  <Link
+                    className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                    href="/reference-data"
+                  >
+                    Open Reference Data
+                  </Link>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -1068,7 +1076,7 @@ function getRootCauseSuggestedFix(group: string) {
     numeric_or_preview: "Regenerate preview after the parser fix. Remaining rows here usually mean a truly invalid amount or template issue.",
     other: "Review the detailed exception message and suggested fix.",
     period_conflict: "Use the replacement workflow before posting another active import for the same period.",
-    reference_mapping: "Import or correct the missing reference mappings, then rerun validation.",
+    reference_mapping: "Add or correct missing reference rows in Reference Data, or use a bulk reference import, then rerun validation.",
     required_fields: "Fix the source file or template mapping, regenerate preview, and rerun validation.",
     trial_balance_integrity: "Review out-of-balance funds, missing rows, signs, and beginning/net/ending formulas before posting."
   };

@@ -347,22 +347,13 @@ async function loadActivePostedLines({
   adminClient: SupabaseClient;
   request: RunCalculationRequest;
 }) {
-  const result = await adminClient
-    .from("active_trial_balance_lines")
-    .select(
-      "trial_balance_line_id, organization_id, fiscal_year, period, full_account_number, fund_code, acfr_code, department_code, function_code, object_code, account_name, beginning_balance, debits, credits, net_change, ending_balance, import_batch_id, template_version_id, account_structure_id, validation_run_id, posting_run_id"
-    )
-    .eq("organization_id", request.organizationId)
-    .eq("fiscal_year", request.fiscalYear)
-    .gte("period", request.periodFrom)
-    .lte("period", request.periodTo)
-    .returns<ActiveTrialBalanceLine[]>();
-
-  if (result.error) {
-    throw new Error(result.error.message);
-  }
-
-  const lines = result.data ?? [];
+  const lines = await loadActiveTrialBalanceLinesPage({
+    adminClient,
+    fiscalYear: request.fiscalYear,
+    organizationId: request.organizationId,
+    periodFrom: request.periodFrom,
+    periodTo: request.periodTo
+  });
   if (lines.length === 0) {
     throw new Error("No posted active trial balance data exists for this range.");
   }
@@ -431,22 +422,56 @@ async function loadLinesForPeriod({
   periodFrom: number;
   periodTo: number;
 }) {
-  const result = await adminClient
-    .from("active_trial_balance_lines")
-    .select(
-      "trial_balance_line_id, organization_id, fiscal_year, period, full_account_number, fund_code, acfr_code, department_code, function_code, object_code, account_name, beginning_balance, debits, credits, net_change, ending_balance, import_batch_id, template_version_id, account_structure_id, validation_run_id, posting_run_id"
-    )
-    .eq("organization_id", organizationId)
-    .eq("fiscal_year", fiscalYear)
-    .gte("period", periodFrom)
-    .lte("period", periodTo)
-    .returns<ActiveTrialBalanceLine[]>();
+  return loadActiveTrialBalanceLinesPage({
+    adminClient,
+    fiscalYear,
+    organizationId,
+    periodFrom,
+    periodTo
+  });
+}
 
-  if (result.error) {
-    throw new Error(result.error.message);
+async function loadActiveTrialBalanceLinesPage({
+  adminClient,
+  fiscalYear,
+  organizationId,
+  periodFrom,
+  periodTo
+}: {
+  adminClient: SupabaseClient;
+  fiscalYear: number;
+  organizationId: string;
+  periodFrom: number;
+  periodTo: number;
+}) {
+  const pageSize = 1000;
+  const rows: ActiveTrialBalanceLine[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const result = await adminClient
+      .from("active_trial_balance_lines")
+      .select(
+        "trial_balance_line_id, organization_id, fiscal_year, period, full_account_number, fund_code, acfr_code, department_code, function_code, object_code, account_name, beginning_balance, debits, credits, net_change, ending_balance, import_batch_id, template_version_id, account_structure_id, validation_run_id, posting_run_id"
+      )
+      .eq("organization_id", organizationId)
+      .eq("fiscal_year", fiscalYear)
+      .gte("period", periodFrom)
+      .lte("period", periodTo)
+      .order("period", { ascending: true })
+      .order("fund_code", { ascending: true })
+      .range(from, from + pageSize - 1)
+      .returns<ActiveTrialBalanceLine[]>();
+
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+
+    rows.push(...(result.data ?? []));
+
+    if ((result.data ?? []).length < pageSize) {
+      return rows;
+    }
   }
-
-  return result.data ?? [];
 }
 
 function assertSingleActiveImportPerPeriod(lines: ActiveTrialBalanceLine[]) {

@@ -209,7 +209,7 @@ export async function GovernedDashboardPage({
           title="Fund Performance"
         >
           {model.calculationRun ? (
-            <FundsView output={model.output} />
+            <FundsView output={model.output} selection={model.selection} />
           ) : (
             <Placeholder>
               This section will show fund-level beginning balance, revenues,

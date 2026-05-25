@@ -435,10 +435,16 @@ export function FinancialStatementsView({ output }: { output: DashboardOutput })
   );
 }
 
-export function FundsView({ output }: { output: DashboardOutput }) {
-  const rows = buildFundPerformanceRows(output);
+export function FundsView({
+  output,
+  selection
+}: {
+  output: DashboardOutput;
+  selection: DashboardSelection;
+}) {
+  const rows = buildFundPerformanceRows(output, selection);
 
-  if (output.dashboardFacts.length === 0) {
+  if (output.dashboardFactCounts.rawTotal === 0) {
     return <DashboardFactsEmptyState hasDisplayFilter={false} output={output} />;
   }
 
@@ -451,13 +457,13 @@ export function FundsView({ output }: { output: DashboardOutput }) {
           columns={[
             ["Fund", (row) => row.fund],
             ["Fund Group", (row) => row.fundGroup ?? "Not provided"],
-            ["Beginning", (row) => formatAmount(row.beginningBalance)],
             ["Revenues", (row) => formatMaybeAmount(row.revenues)],
             ["Expenditures", (row) => formatMaybeAmount(row.expenditures)],
             ["OFS", (row) => formatMaybeAmount(row.otherFinancingSources)],
             ["OFU", (row) => formatMaybeAmount(row.otherFinancingUses)],
-            ["Net Change", (row) => formatAmount(row.netChange)],
-            ["Ending", (row) => formatAmount(row.endingBalance)],
+            ["Net Activity", (row) => formatMaybeAmount(row.netActivity)],
+            ["Fund Balance / Net Position", (row) => formatMaybeAmount(row.fundBalanceNetPosition)],
+            ["TB Ending Net", (row) => formatAmount(row.trialBalanceEndingNet)],
             ["Exceptions", (row) => row.exceptionCount],
             ["Readiness Issues", (row) => row.mappingIssueCount]
           ]}
@@ -474,8 +480,8 @@ export function MaterialChangesView({
   output: DashboardOutput;
   selection: DashboardSelection;
 }) {
-  const fundMovements = buildFundPerformanceRows(output)
-    .sort((a, b) => Math.abs(b.netChange) - Math.abs(a.netChange))
+  const fundMovements = buildFundPerformanceRows(output, selection)
+    .sort((a, b) => Math.abs(b.netActivity ?? 0) - Math.abs(a.netActivity ?? 0))
     .slice(0, selection.topN);
 
   return (
@@ -509,7 +515,7 @@ export function MaterialChangesView({
           columns={[
             ["Fund", (row) => row.fund],
             ["Fund Group", (row) => row.fundGroup ?? "Not provided"],
-            ["Net Change", (row) => formatAmount(row.netChange)],
+            ["Net Activity", (row) => formatMaybeAmount(row.netActivity)],
             ["Revenues", (row) => formatMaybeAmount(row.revenues)],
             ["Expenditures", (row) => formatMaybeAmount(row.expenditures)]
           ]}
@@ -717,10 +723,13 @@ type FactSummary = {
   cashAndInvestments: number | null;
   endingBalance: number;
   expenditures: number | null;
+  fundBalanceNetPosition: number | null;
   netChange: number;
+  netActivity: number | null;
   otherFinancingSources: number | null;
   otherFinancingUses: number | null;
   revenues: number | null;
+  trialBalanceEndingNet: number;
 };
 
 type FundPerformanceRow = FactSummary & {
@@ -730,45 +739,106 @@ type FundPerformanceRow = FactSummary & {
   mappingIssueCount: number;
 };
 
-function buildFundPerformanceRows(output: DashboardOutput): FundPerformanceRow[] {
+function buildFundPerformanceRows(
+  output: DashboardOutput,
+  selection: DashboardSelection
+): FundPerformanceRow[] {
+  const accountTypeFacts = selectFundPerformanceFacts(output, selection);
   const groups = new Map<string, DashboardFinancialFactRow[]>();
 
-  for (const fact of output.dashboardFacts) {
+  for (const fact of accountTypeFacts) {
     const fund = fact.fund_code;
     if (!fund) continue;
     groups.set(fund, [...(groups.get(fund) ?? []), fact]);
   }
 
   return [...groups.entries()]
-    .map(([fund, facts]) => ({
-      ...summarizeFacts(facts),
+    .map(([fund, facts]) => {
+      const fundTrialBalanceFacts = selectFundTrialBalanceFacts(output, selection, fund);
+      return {
+      ...summarizeFacts(facts, fundTrialBalanceFacts),
       exceptionCount: output.exceptions.filter((row) => row.fund_code === fund).length,
       fund,
       fundGroup: facts.find((fact) => fact.fund_group)?.fund_group ?? null,
       mappingIssueCount: output.mappingCoverage.filter(
         (row) => row.segment_type === "fund" && row.segment_code === fund
       ).length
-    }))
+    };
+    })
     .sort((a, b) => a.fund.localeCompare(b.fund));
 }
 
-function summarizeFacts(facts: DashboardFinancialFactRow[]): FactSummary {
+function selectFundPerformanceFacts(
+  output: DashboardOutput,
+  selection: DashboardSelection
+) {
+  const hasCrossDimensionFilter = Boolean(
+    selection.department ||
+      selection.functionCode ||
+      selection.acfr
+  );
+  const sourceFacts = hasCrossDimensionFilter
+    ? output.dashboardFacts
+    : output.dashboardRawFacts.filter((fact) => fact.summary_type === "fund_account_type");
+
+  return sourceFacts.filter((fact) => {
+    if (selection.fund && fact.fund_code !== selection.fund) return false;
+    if (selection.fundGroup && fact.fund_group !== selection.fundGroup) return false;
+    if (selection.accountType && fact.account_type !== selection.accountType) return false;
+    return true;
+  });
+}
+
+function selectFundTrialBalanceFacts(
+  output: DashboardOutput,
+  selection: DashboardSelection,
+  fund: string
+) {
+  const hasCrossDimensionFilter = Boolean(
+    selection.department ||
+      selection.functionCode ||
+      selection.acfr ||
+      selection.accountType
+  );
+
+  if (hasCrossDimensionFilter) {
+    return output.dashboardFacts.filter((fact) => fact.fund_code === fund);
+  }
+
+  return output.dashboardRawFacts.filter(
+    (fact) => fact.summary_type === "fund" && fact.fund_code === fund
+  );
+}
+
+function summarizeFacts(
+  facts: DashboardFinancialFactRow[],
+  trialBalanceFacts = facts
+): FactSummary {
   const revenues = sumCategory(facts, isRevenueType);
   const expenditures = sumCategory(facts, isExpenditureType);
   const otherFinancingSources = sumCategory(facts, isOtherFinancingSourceType);
   const otherFinancingUses = sumCategory(facts, isOtherFinancingUseType);
+  const fundBalanceNetPosition = sumEndingCategory(facts, isFundBalanceOrNetPositionType);
   const cashFacts = facts.filter(isCashOrInvestmentFact);
 
   return {
-    beginningBalance: sumFactAmount(facts, "beginning_balance"),
+    beginningBalance: sumFactAmount(trialBalanceFacts, "beginning_balance"),
     cashAndInvestments:
       cashFacts.length > 0 ? sumFactAmount(cashFacts, "ending_balance") : null,
-    endingBalance: sumFactAmount(facts, "ending_balance"),
+    endingBalance: sumFactAmount(trialBalanceFacts, "ending_balance"),
     expenditures,
+    fundBalanceNetPosition,
     netChange: sumFactAmount(facts, "presentation_amount"),
+    netActivity: calculateNetActivity({
+      expenditures,
+      otherFinancingSources,
+      otherFinancingUses,
+      revenues
+    }),
     otherFinancingSources,
     otherFinancingUses,
-    revenues
+    revenues,
+    trialBalanceEndingNet: sumFactAmount(trialBalanceFacts, "ending_balance")
   };
 }
 
@@ -778,6 +848,48 @@ function sumCategory(
 ) {
   const matching = facts.filter((fact) => predicate(normalizeKey(fact.account_type)));
   return matching.length > 0 ? sumFactAmount(matching, "presentation_amount") : null;
+}
+
+function sumEndingCategory(
+  facts: DashboardFinancialFactRow[],
+  predicate: (accountType: string) => boolean
+) {
+  const matching = facts.filter((fact) => predicate(normalizeKey(fact.account_type)));
+  return matching.length > 0
+    ? matching.reduce(
+        (total, fact) =>
+          total + endingPresentationAmount(fact.account_type, numericAmount(fact.ending_balance)),
+        0
+      )
+    : null;
+}
+
+function calculateNetActivity({
+  expenditures,
+  otherFinancingSources,
+  otherFinancingUses,
+  revenues
+}: {
+  expenditures: number | null;
+  otherFinancingSources: number | null;
+  otherFinancingUses: number | null;
+  revenues: number | null;
+}) {
+  if (
+    revenues === null &&
+    expenditures === null &&
+    otherFinancingSources === null &&
+    otherFinancingUses === null
+  ) {
+    return null;
+  }
+
+  return (
+    (revenues ?? 0) +
+    (otherFinancingSources ?? 0) -
+    (expenditures ?? 0) -
+    (otherFinancingUses ?? 0)
+  );
 }
 
 function sumFactAmount(
@@ -804,6 +916,14 @@ function isOtherFinancingSourceType(value: string) {
 
 function isOtherFinancingUseType(value: string) {
   return value === "other_financing_use" || value === "other_financing_uses" || value === "transfer_out" || value === "transfers_out";
+}
+
+function isFundBalanceOrNetPositionType(value: string) {
+  return value === "fund_balance" || value === "net_position";
+}
+
+function endingPresentationAmount(accountType: string | null | undefined, amount: number) {
+  return isFundBalanceOrNetPositionType(normalizeKey(accountType)) ? amount * -1 : amount;
 }
 
 function isCashOrInvestmentFact(fact: DashboardFinancialFactRow) {

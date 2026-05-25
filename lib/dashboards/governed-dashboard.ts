@@ -231,6 +231,7 @@ export type DashboardOptions = {
 export type DashboardOutput = {
   dashboardFactCounts: DashboardFactCounts;
   dashboardFacts: DashboardFinancialFactRow[];
+  dashboardRawFacts: DashboardFinancialFactRow[];
   exceptions: ExceptionRow[];
   filterNotes: string[];
   financialSummaries: FinancialSummaryRow[];
@@ -527,6 +528,7 @@ async function loadDashboardOutput({
       rawFacts: facts
     }),
     dashboardFacts: facts,
+    dashboardRawFacts: facts,
     exceptions: exceptions.data ?? [],
     filterNotes: [],
     financialSummaries: [],
@@ -553,6 +555,7 @@ async function loadDashboardOutput({
         rawFacts: facts
       }),
       dashboardFacts: filteredFacts,
+      dashboardRawFacts: facts,
       filterNotes: uniqueText([
         ...filteredOutput.filterNotes.filter(
           (note) => !note.startsWith("Statement summary rows can only be filtered")
@@ -572,6 +575,7 @@ async function loadDashboardOutput({
   const legacyOutput = applyDashboardSelectionFilters(
     {
       dashboardFacts: [],
+      dashboardRawFacts: [],
       dashboardFactCounts: buildDashboardFactCounts({
         filteredFacts: [],
         rawFacts: []
@@ -859,6 +863,7 @@ function emptyOutput(): DashboardOutput {
       rawFacts: []
     }),
     dashboardFacts: [],
+    dashboardRawFacts: [],
     exceptions: [],
     filterNotes: [],
     financialSummaries: [],
@@ -914,6 +919,7 @@ function applyDashboardSelectionFilters(
   return {
     dashboardFactCounts: output.dashboardFactCounts,
     dashboardFacts: output.dashboardFacts,
+    dashboardRawFacts: output.dashboardRawFacts,
     exceptions,
     filterNotes: uniqueText(filterNotes),
     financialSummaries,

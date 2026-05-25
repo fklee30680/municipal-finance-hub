@@ -901,9 +901,15 @@ function getRootCauseGroup(exceptionCode: string, exceptionMessage = "") {
 
   if (
     exceptionCode === "balance_formula_failure" ||
-    exceptionCode === "net_change_formula_failure"
+    exceptionCode === "net_change_formula_failure" ||
+    exceptionCode === "row_formula_mismatch" ||
+    exceptionCode === "row_net_change_mismatch" ||
+    exceptionCode === "batch_out_of_balance" ||
+    exceptionCode === "fund_out_of_balance" ||
+    exceptionCode === "batch_debits_credits_out_of_balance" ||
+    exceptionCode === "fund_debits_credits_out_of_balance"
   ) {
-    return "formula_checks";
+    return "trial_balance_integrity";
   }
 
   if (exceptionCode === "period_conflict_active_data_exists") {
@@ -921,12 +927,12 @@ function getRootCauseLabelFromGroup(group: string) {
   const labels: Record<string, string> = {
     account_parsing: "Account Parsing",
     fiscal_setup: "Fiscal Setup",
-    formula_checks: "Formula Checks",
     numeric_or_preview: "Numeric Parsing",
     other: "Other",
     period_conflict: "Period Conflict",
     reference_mapping: "Reference Mapping",
-    required_fields: "Required Fields"
+    required_fields: "Required Fields",
+    trial_balance_integrity: "Trial Balance Integrity"
   };
 
   return labels[group] ?? "Other";
@@ -960,8 +966,8 @@ function getRootCauseMessage(
     return "Account numbers or parsed account segments do not match the configured structure.";
   }
 
-  if (group === "formula_checks") {
-    return "Trial balance formula checks did not tie using the MVP sign convention.";
+  if (group === "trial_balance_integrity") {
+    return "Trial balance balancing or row formula checks did not tie.";
   }
 
   if (group === "period_conflict") {
@@ -975,12 +981,12 @@ function getRootCauseSuggestedFix(group: string) {
   const fixes: Record<string, string> = {
     account_parsing: "Correct the account structure or source account numbers, then regenerate preview.",
     fiscal_setup: "Configure the fiscal year and period in Setup, then rerun validation.",
-    formula_checks: "Check beginning balance, debits, credits, net change, and ending balance.",
     numeric_or_preview: "Regenerate preview after the parser fix. Remaining rows here usually mean a truly invalid amount or template issue.",
     other: "Review the detailed exception message and suggested fix.",
     period_conflict: "Use the replacement workflow before posting another active import for the same period.",
     reference_mapping: "Import or correct the missing reference mappings, then rerun validation.",
-    required_fields: "Fix the source file or template mapping, regenerate preview, and rerun validation."
+    required_fields: "Fix the source file or template mapping, regenerate preview, and rerun validation.",
+    trial_balance_integrity: "Review out-of-balance funds, missing rows, signs, and beginning/net/ending formulas before posting."
   };
 
   return fixes[group] ?? fixes.other;
@@ -992,8 +998,8 @@ function getRootCauseSortOrder(group: string) {
     numeric_or_preview: 2,
     required_fields: 3,
     account_parsing: 4,
-    reference_mapping: 5,
-    formula_checks: 6,
+    trial_balance_integrity: 5,
+    reference_mapping: 6,
     period_conflict: 7,
     other: 8
   };

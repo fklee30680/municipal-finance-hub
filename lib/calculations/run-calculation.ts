@@ -15,6 +15,8 @@ import {
   type ThresholdConfig
 } from "@/lib/calculations/thresholds";
 
+const BALANCE_TOLERANCE = 0.01;
+
 type TimeView = "current_period" | "ytd" | "selected_range";
 
 export type RunCalculationRequest = {
@@ -921,6 +923,12 @@ function buildResults({
       importBatchIds,
       request
     }),
+    ...buildTrialBalanceIntegrityExceptions({
+      calculationRunId,
+      importBatchIds,
+      lines: enrichedLines,
+      request
+    }),
     ...buildVarianceExceptions({
       calculationRunId,
       importBatchIds,
@@ -1430,6 +1438,199 @@ function buildCashExceptions({
   return [];
 }
 
+function buildTrialBalanceIntegrityExceptions({
+  calculationRunId,
+  importBatchIds,
+  lines,
+  request
+}: {
+  calculationRunId: string;
+  importBatchIds: string[];
+  lines: EnrichedLine[];
+  request: RunCalculationRequest;
+}) {
+  const exceptions: Record<string, unknown>[] = [];
+  const batchTotals = buildPostedBalanceTotals(lines);
+
+  if (!amountsTie(batchTotals.endingBalance, 0)) {
+    exceptions.push(
+      buildExceptionRow({
+        calculationRunId,
+        category: "trial_balance_integrity",
+        currentAmount: batchTotals.endingBalance,
+        importBatchIds,
+        message: "Posted active trial balance data does not balance for the selected range.",
+        organizationId: request.organizationId,
+        period: request.periodTo,
+        recommendedAction:
+          "Review active posted import for the selected fiscal year/period range.",
+        request,
+        severity: "Critical",
+        type: "batch_out_of_balance"
+      })
+    );
+  }
+
+  if (hasMeaningfulDebitCreditActivity(batchTotals)) {
+    const debitCreditDifference = batchTotals.debits - batchTotals.credits;
+    if (!amountsTie(debitCreditDifference, 0)) {
+      exceptions.push(
+        buildExceptionRow({
+          calculationRunId,
+          category: "trial_balance_integrity",
+          currentAmount: debitCreditDifference,
+          importBatchIds,
+          message: "Posted active trial balance debits do not equal credits for the selected range.",
+          organizationId: request.organizationId,
+          period: request.periodTo,
+          recommendedAction:
+            "Review active posted import rows and debit/credit mappings for the selected range.",
+          request,
+          severity: "Critical",
+          type: "batch_debits_credits_out_of_balance"
+        })
+      );
+    }
+  }
+
+  for (const [fundCode, fundTotals] of buildPostedFundBalanceTotals(lines)) {
+    if (!amountsTie(fundTotals.endingBalance, 0)) {
+      exceptions.push(
+        buildExceptionRow({
+          calculationRunId,
+          category: "trial_balance_integrity",
+          currentAmount: fundTotals.endingBalance,
+          importBatchIds,
+          message: `Fund ${fundCode} does not balance for the selected calculation range.`,
+          organizationId: request.organizationId,
+          period: request.periodTo,
+          recommendedAction:
+            "Review posted trial balance source, replacement/supersession status, and fund/account rows.",
+          request,
+          segmentCode: fundCode,
+          segmentType: "fund",
+          severity: "Critical",
+          type: "fund_out_of_balance"
+        })
+      );
+    }
+
+    if (hasMeaningfulDebitCreditActivity(fundTotals)) {
+      const debitCreditDifference = fundTotals.debits - fundTotals.credits;
+      if (!amountsTie(debitCreditDifference, 0)) {
+        exceptions.push(
+          buildExceptionRow({
+            calculationRunId,
+            category: "trial_balance_integrity",
+            currentAmount: debitCreditDifference,
+            importBatchIds,
+            message: `Fund ${fundCode} debits do not equal credits for the selected calculation range.`,
+            organizationId: request.organizationId,
+            period: request.periodTo,
+            recommendedAction:
+              "Review posted trial balance source, debit/credit mappings, and fund/account rows.",
+            request,
+            segmentCode: fundCode,
+            segmentType: "fund",
+            severity: "Critical",
+            type: "fund_debits_credits_out_of_balance"
+          })
+        );
+      }
+    }
+  }
+
+  for (const line of lines) {
+    const expectedEnding = money(line.beginning_balance) + money(line.net_change);
+    if (!amountsTie(expectedEnding, money(line.ending_balance))) {
+      exceptions.push(
+        buildExceptionRow({
+          calculationRunId,
+          category: "trial_balance_integrity",
+          currentAmount: money(line.ending_balance) - expectedEnding,
+          importBatchIds,
+          message: `Posted row ${line.full_account_number} does not foot. Beginning balance plus net change does not equal ending balance.`,
+          organizationId: request.organizationId,
+          period: request.periodTo,
+          recommendedAction:
+            "Review beginning balance, net change, and ending balance in the posted source row.",
+          request,
+          segmentCode: line.fund_code ?? undefined,
+          segmentType: line.fund_code ? "fund" : undefined,
+          severity: "Critical",
+          type: "row_formula_mismatch"
+        })
+      );
+    }
+
+    const expectedNetChange = money(line.debits) - money(line.credits);
+    if (!amountsTie(expectedNetChange, money(line.net_change))) {
+      exceptions.push(
+        buildExceptionRow({
+          calculationRunId,
+          category: "trial_balance_integrity",
+          currentAmount: money(line.net_change) - expectedNetChange,
+          importBatchIds,
+          message: `Posted row ${line.full_account_number} net change does not match debit/credit activity.`,
+          organizationId: request.organizationId,
+          period: request.periodTo,
+          recommendedAction:
+            "Review debit, credit, and net change columns or confirm export sign convention.",
+          request,
+          segmentCode: line.fund_code ?? undefined,
+          segmentType: line.fund_code ? "fund" : undefined,
+          severity: "Critical",
+          type: "row_net_change_mismatch"
+        })
+      );
+    }
+  }
+
+  return exceptions;
+}
+
+function buildPostedBalanceTotals(lines: ActiveTrialBalanceLine[]) {
+  return lines.reduce(
+    (totals, line) => ({
+      credits: totals.credits + money(line.credits),
+      debits: totals.debits + money(line.debits),
+      endingBalance: totals.endingBalance + money(line.ending_balance)
+    }),
+    { credits: 0, debits: 0, endingBalance: 0 }
+  );
+}
+
+function buildPostedFundBalanceTotals(lines: ActiveTrialBalanceLine[]) {
+  const totalsByFund = new Map<string, ReturnType<typeof buildPostedBalanceTotals>>();
+
+  for (const line of lines) {
+    const fundCode = text(line.fund_code);
+    if (!fundCode) {
+      continue;
+    }
+
+    const current = totalsByFund.get(fundCode) ?? {
+      credits: 0,
+      debits: 0,
+      endingBalance: 0
+    };
+    current.credits += money(line.credits);
+    current.debits += money(line.debits);
+    current.endingBalance += money(line.ending_balance);
+    totalsByFund.set(fundCode, current);
+  }
+
+  return totalsByFund;
+}
+
+function hasMeaningfulDebitCreditActivity(totals: { credits: number; debits: number }) {
+  return Math.abs(totals.debits) > BALANCE_TOLERANCE || Math.abs(totals.credits) > BALANCE_TOLERANCE;
+}
+
+function amountsTie(left: number, right: number) {
+  return Math.abs(left - right) <= BALANCE_TOLERANCE;
+}
+
 function buildExceptionRow({
   calculationRunId,
   category,
@@ -1476,6 +1677,7 @@ function buildExceptionRow({
     exception_status: "open",
     exception_type: type,
     fiscal_year: request.fiscalYear,
+    fund_code: segmentType === "fund" ? segmentCode ?? null : null,
     message,
     organization_id: organizationId,
     period,

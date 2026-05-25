@@ -309,6 +309,10 @@ export async function runTrialBalanceValidation({
     previewRows,
     referenceData
   });
+  validateTrialBalanceIntegrity({
+    exceptions,
+    previewRows
+  });
 
   if (mappingVersions.length === 0) {
     exceptions.push(createException({
@@ -1028,9 +1032,9 @@ function validateFinancialFormulas({
     const expectedEnding = beginning + netChange;
     if (!amountsTie(expectedEnding, ending)) {
       exceptions.push(createException({
-        code: "balance_formula_failure",
+        code: "row_formula_mismatch",
         message:
-          "Beginning balance plus net change does not tie to ending balance using the MVP sign convention.",
+          `Row ${row.source_row_number} does not foot. Beginning balance plus net change does not equal ending balance. Difference: ${formatMoney(ending - expectedEnding)}.`,
         previewRowId: row.preview_row_id,
         rowNumber: row.source_row_number,
         targetFieldName: "ending_balance",
@@ -1043,9 +1047,9 @@ function validateFinancialFormulas({
     const expectedNetChange = debits - credits;
     if (!amountsTie(expectedNetChange, netChange)) {
       exceptions.push(createException({
-        code: "net_change_formula_failure",
+        code: "row_net_change_mismatch",
         message:
-          "Debits minus credits does not tie to net change using the MVP sign convention.",
+          `Row ${row.source_row_number} net change does not match debit/credit activity using the MVP sign convention. Difference: ${formatMoney(netChange - expectedNetChange)}.`,
         previewRowId: row.preview_row_id,
         rowNumber: row.source_row_number,
         targetFieldName: "net_change",
@@ -1055,12 +1059,106 @@ function validateFinancialFormulas({
   }
 }
 
+function validateTrialBalanceIntegrity({
+  exceptions,
+  previewRows
+}: {
+  exceptions: ValidationExceptionDraft[];
+  previewRows: PreviewRowRecord[];
+}) {
+  const totals = buildBalanceTotals(previewRows);
+
+  if (!amountsTie(totals.endingBalance, 0)) {
+    exceptions.push(createException({
+      code: "batch_out_of_balance",
+      message: `Trial balance does not balance. Total ending balance nets to ${formatMoney(totals.endingBalance)}.`,
+      targetFieldName: "ending_balance",
+      transformedValue: String(totals.endingBalance)
+    }));
+  }
+
+  if (hasMeaningfulDebitCreditActivity(totals)) {
+    const debitCreditDifference = totals.debits - totals.credits;
+    if (!amountsTie(debitCreditDifference, 0)) {
+      exceptions.push(createException({
+        code: "batch_debits_credits_out_of_balance",
+        message: `Total debits do not equal total credits. Difference is ${formatMoney(debitCreditDifference)}.`,
+        targetFieldName: "debits",
+        transformedValue: String(debitCreditDifference)
+      }));
+    }
+  }
+
+  for (const [fundCode, fundTotals] of buildFundBalanceTotals(previewRows)) {
+    if (!amountsTie(fundTotals.endingBalance, 0)) {
+      exceptions.push(createException({
+        code: "fund_out_of_balance",
+        message: `Fund ${fundCode} does not balance. Ending balances net to ${formatMoney(fundTotals.endingBalance)}.`,
+        rawValue: fundCode,
+        targetFieldName: "ending_balance",
+        transformedValue: String(fundTotals.endingBalance)
+      }));
+    }
+
+    if (hasMeaningfulDebitCreditActivity(fundTotals)) {
+      const debitCreditDifference = fundTotals.debits - fundTotals.credits;
+      if (!amountsTie(debitCreditDifference, 0)) {
+        exceptions.push(createException({
+          code: "fund_debits_credits_out_of_balance",
+          message: `Fund ${fundCode} debits do not equal credits. Difference is ${formatMoney(debitCreditDifference)}.`,
+          rawValue: fundCode,
+          targetFieldName: "debits",
+          transformedValue: String(debitCreditDifference)
+        }));
+      }
+    }
+  }
+}
+
+function buildBalanceTotals(rows: PreviewRowRecord[]) {
+  return rows.reduce(
+    (totals, row) => ({
+      credits: totals.credits + (getNumericValue(row.credits) ?? 0),
+      debits: totals.debits + (getNumericValue(row.debits) ?? 0),
+      endingBalance: totals.endingBalance + (getNumericValue(row.ending_balance) ?? 0)
+    }),
+    { credits: 0, debits: 0, endingBalance: 0 }
+  );
+}
+
+function buildFundBalanceTotals(rows: PreviewRowRecord[]) {
+  const totalsByFund = new Map<string, ReturnType<typeof buildBalanceTotals>>();
+
+  for (const row of rows) {
+    const fundCode = row.fund_code?.trim();
+    if (!fundCode) {
+      continue;
+    }
+
+    const current = totalsByFund.get(fundCode) ?? {
+      credits: 0,
+      debits: 0,
+      endingBalance: 0
+    };
+    current.credits += getNumericValue(row.credits) ?? 0;
+    current.debits += getNumericValue(row.debits) ?? 0;
+    current.endingBalance += getNumericValue(row.ending_balance) ?? 0;
+    totalsByFund.set(fundCode, current);
+  }
+
+  return totalsByFund;
+}
+
+function hasMeaningfulDebitCreditActivity(totals: { credits: number; debits: number }) {
+  return Math.abs(totals.debits) > BALANCE_TOLERANCE || Math.abs(totals.credits) > BALANCE_TOLERANCE;
+}
+
 function dedupeValidationExceptions(exceptions: ValidationExceptionDraft[]) {
   const byKey = new Map<string, ValidationExceptionDraft>();
 
   for (const exception of exceptions) {
     const key = [
-      exception.previewRowId ?? exception.rowNumber ?? "import",
+      exception.previewRowId ?? exception.rowNumber ?? exception.rawValue ?? "import",
       exception.targetFieldName ?? "",
       getRootCauseCode(exception)
     ].join("|");
@@ -1833,6 +1931,15 @@ function getNumericValue(value: number | string | null) {
 
 function amountsTie(left: number, right: number) {
   return Math.abs(left - right) <= BALANCE_TOLERANCE;
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "currency"
+  }).format(value);
 }
 
 function getStringMetadataValue(

@@ -8,6 +8,7 @@ export type ValidationRuleCategory =
   | "reference_mapping"
   | "duplicate_account"
   | "financial_formula"
+  | "trial_balance_integrity"
   | "fiscal_period"
   | "period_conflict"
   | "preview_issue_carryforward";
@@ -103,6 +104,42 @@ export const validationRuleCatalog: ValidationRuleDefinition[] = [
     code: "net_change_formula_failure",
     defaultSeverity: "critical_error",
     suggestedFix: "Check debit, credit, and net change columns in the source file."
+  },
+  {
+    category: "trial_balance_integrity",
+    code: "batch_out_of_balance",
+    defaultSeverity: "critical_error",
+    suggestedFix: "Review missing accounts, sign convention, or incomplete export rows."
+  },
+  {
+    category: "trial_balance_integrity",
+    code: "fund_out_of_balance",
+    defaultSeverity: "critical_error",
+    suggestedFix: "Review missing accounts, incorrect signs, or incomplete export rows for this fund."
+  },
+  {
+    category: "trial_balance_integrity",
+    code: "batch_debits_credits_out_of_balance",
+    defaultSeverity: "critical_error",
+    suggestedFix: "Review whether the file is incomplete or the debit/credit columns are mapped correctly."
+  },
+  {
+    category: "trial_balance_integrity",
+    code: "fund_debits_credits_out_of_balance",
+    defaultSeverity: "critical_error",
+    suggestedFix: "Review activity rows, mappings, or incomplete export rows for this fund."
+  },
+  {
+    category: "trial_balance_integrity",
+    code: "row_formula_mismatch",
+    defaultSeverity: "critical_error",
+    suggestedFix: "Review beginning balance, net change, and ending balance for this row."
+  },
+  {
+    category: "trial_balance_integrity",
+    code: "row_net_change_mismatch",
+    defaultSeverity: "critical_error",
+    suggestedFix: "Review debit, credit, and net change columns or confirm export sign convention."
   },
   {
     category: "fiscal_period",

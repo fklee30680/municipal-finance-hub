@@ -8,6 +8,7 @@ import {
   type DashboardOptions,
   type DashboardOutput,
   type DashboardSelection,
+  type DashboardView,
   formatAmount,
   formatDate,
   formatPercent,
@@ -46,10 +47,12 @@ export function DashboardNav() {
 
 export function DashboardFilterBar({
   options,
-  selection
+  selection,
+  view
 }: {
   options: DashboardOptions;
   selection: DashboardSelection;
+  view: DashboardView;
 }) {
   const fiscalYears = Array.from(
     new Set(options.fiscalPeriods.map((period) => period.fiscal_year))
@@ -98,11 +101,6 @@ export function DashboardFilterBar({
                     Period {period.period} - {period.period_name}
                   </option>
                 ))}
-              </Select>
-              <Select label="Time view" name="timeView" value={selection.timeView}>
-                <option value="current_period">Current period</option>
-                <option value="ytd">YTD</option>
-                <option value="selected_range">Selected range</option>
               </Select>
               <div className="md:col-span-2">
                 <Select
@@ -172,19 +170,23 @@ export function DashboardFilterBar({
           </div>
 
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-            <FilterSection title="Display">
-              <Select label="Top N" name="topN" value={String(selection.topN)}>
-                {[5, 10, 20, 50].map((value) => (
-                  <option key={value} value={value}>
-                    Top {value}
-                  </option>
-                ))}
-              </Select>
-              <Select label="Sort" name="sort" value={selection.sort}>
-                <option value="largest_amount">Largest dollar variance</option>
-                <option value="largest_percent">Largest percent variance</option>
-              </Select>
-            </FilterSection>
+            {view === "variances" ? (
+              <FilterSection title="Display">
+                <Select label="Top N" name="topN" value={String(selection.topN)}>
+                  {[5, 10, 20, 50].map((value) => (
+                    <option key={value} value={value}>
+                      Top {value}
+                    </option>
+                  ))}
+                </Select>
+                <Select label="Sort" name="sort" value={selection.sort}>
+                  <option value="largest_amount">Largest dollar variance</option>
+                  <option value="largest_percent">Largest percent variance</option>
+                </Select>
+              </FilterSection>
+            ) : (
+              <div />
+            )}
             <button className="h-10 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
               Apply Filters
             </button>
@@ -227,7 +229,6 @@ export function DataReadinessBanner({
       <CardContent className="space-y-4 pt-6">
         <div className="grid gap-4 text-sm md:grid-cols-3 xl:grid-cols-6">
           <Info label="Selection" value={`FY ${selection.fiscalYear} P${selection.periodFrom}-P${selection.periodTo}`} />
-          <Info label="Time view" value={titleize(selection.timeView)} />
           <Info label="Reporting scope" value={formatReportingScope(selection.reportingScope)} />
           <Info
             label="Calculation"

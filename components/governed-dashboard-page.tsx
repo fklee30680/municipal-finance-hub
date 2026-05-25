@@ -30,7 +30,7 @@ const viewCopy: Record<
 > = {
   cfo_overview: {
     description:
-      "Review governed Slice 9 calculation outputs, data readiness, key totals, variances, and exceptions for the selected period.",
+      "Review governed Slice 9 calculation outputs, data readiness, key totals, and exceptions for the selected period range.",
     title: "CFO Overview"
   },
   exceptions: {
@@ -89,7 +89,11 @@ export async function GovernedDashboardPage({
           <DashboardNav />
         </div>
 
-        <DashboardFilterBar options={model.options} selection={model.selection} />
+        <DashboardFilterBar
+          options={model.options}
+          selection={model.selection}
+          view={view}
+        />
         <DataReadinessBanner
           calculationRun={model.calculationRun}
           failedRun={model.failedRun}
@@ -103,16 +107,13 @@ export async function GovernedDashboardPage({
             {view === "cfo_overview" ? (
               <>
                 <SummaryCards output={model.output} selection={model.selection} />
-                <div className="grid gap-6 xl:grid-cols-2">
-                  <VariancesView output={{ ...model.output, variances: model.output.variances.slice(0, 10) }} />
-                  <ExceptionsView
-                    output={{
-                      ...model.output,
-                      exceptions: model.output.exceptions.slice(0, 10),
-                      mappingCoverage: model.output.mappingCoverage.slice(0, 10)
-                    }}
-                  />
-                </div>
+                <ExceptionsView
+                  output={{
+                    ...model.output,
+                    exceptions: model.output.exceptions.slice(0, 10),
+                    mappingCoverage: model.output.mappingCoverage.slice(0, 10)
+                  }}
+                />
               </>
             ) : null}
             {view === "financial_statements" ? (

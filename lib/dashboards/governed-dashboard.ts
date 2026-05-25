@@ -375,14 +375,8 @@ function buildSelection({
     defaultPeriod?.fiscal_year ??
     new Date().getFullYear();
   const periodTo = integer(searchParams.periodTo) ?? defaultPeriod?.period ?? 1;
-  const timeView = getAllowed(
-    searchParams.timeView,
-    ["current_period", "selected_range", "ytd"],
-    "current_period"
-  );
-  const periodFrom =
-    integer(searchParams.periodFrom) ??
-    (timeView === "ytd" ? 1 : periodTo);
+  const timeView = "selected_range";
+  const periodFrom = integer(searchParams.periodFrom) ?? periodTo;
 
   return {
     acfr: searchParams.acfr ?? "",

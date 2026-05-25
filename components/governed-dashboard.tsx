@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { DashboardRunCalculationForm } from "@/components/dashboard-run-calculation-form";
+import { FundExceptionsDialog } from "@/components/fund-exceptions-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   type CalculationRun,
@@ -464,7 +465,13 @@ export function FundsView({
             ["Net Activity", (row) => formatMaybeAmount(row.netActivity)],
             ["Fund Balance / Net Position", (row) => formatMaybeAmount(row.fundBalanceNetPosition)],
             ["TB Ending Net", (row) => formatAmount(row.trialBalanceEndingNet)],
-            ["Exceptions", (row) => row.exceptionCount],
+            ["Exceptions", (row) => (
+              <FundExceptionsDialog
+                exceptionCount={row.exceptionCount}
+                exceptions={row.exceptions}
+                fund={row.fund}
+              />
+            )],
             ["Readiness Issues", (row) => row.mappingIssueCount]
           ]}
         />
@@ -734,6 +741,7 @@ type FactSummary = {
 
 type FundPerformanceRow = FactSummary & {
   exceptionCount: number;
+  exceptions: ExceptionRow[];
   fund: string;
   fundGroup: string | null;
   mappingIssueCount: number;
@@ -755,15 +763,17 @@ function buildFundPerformanceRows(
   return [...groups.entries()]
     .map(([fund, facts]) => {
       const fundTrialBalanceFacts = selectFundTrialBalanceFacts(output, selection, fund);
+      const exceptions = output.exceptions.filter((row) => row.fund_code === fund);
       return {
-      ...summarizeFacts(facts, fundTrialBalanceFacts),
-      exceptionCount: output.exceptions.filter((row) => row.fund_code === fund).length,
-      fund,
-      fundGroup: facts.find((fact) => fact.fund_group)?.fund_group ?? null,
-      mappingIssueCount: output.mappingCoverage.filter(
-        (row) => row.segment_type === "fund" && row.segment_code === fund
-      ).length
-    };
+        ...summarizeFacts(facts, fundTrialBalanceFacts),
+        exceptionCount: exceptions.length,
+        exceptions,
+        fund,
+        fundGroup: facts.find((fact) => fact.fund_group)?.fund_group ?? null,
+        mappingIssueCount: output.mappingCoverage.filter(
+          (row) => row.segment_type === "fund" && row.segment_code === fund
+        ).length
+      };
     })
     .sort((a, b) => a.fund.localeCompare(b.fund));
 }

@@ -132,6 +132,11 @@ export type TrendRow = {
   amount_type: string | null;
   amount_value: number | string | null;
   presentation_amount: number | string | null;
+  fund_code: string | null;
+  acfr_code: string | null;
+  department_code: string | null;
+  function_code: string | null;
+  object_code: string | null;
   account_type: string | null;
   reporting_model: string | null;
 };
@@ -199,6 +204,7 @@ export type DashboardOptions = {
 
 export type DashboardOutput = {
   exceptions: ExceptionRow[];
+  filterNotes: string[];
   financialSummaries: FinancialSummaryRow[];
   mappingCoverage: MappingCoverageRow[];
   statementSummaries: StatementSummaryRow[];
@@ -231,6 +237,7 @@ export async function loadDashboardModel({
         adminClient,
         calculationRunId: calculationRun.calculation_run_id,
         organizationId,
+        options,
         selection
       })
     : emptyOutput();
@@ -415,11 +422,13 @@ async function loadDashboardOutput({
   adminClient,
   calculationRunId,
   organizationId,
+  options,
   selection
 }: {
   adminClient: SupabaseClient;
   calculationRunId: string;
   organizationId: string;
+  options: DashboardOptions;
   selection: DashboardSelection;
 }): Promise<DashboardOutput> {
   const [
@@ -454,7 +463,7 @@ async function loadDashboardOutput({
       .returns<VarianceRow[]>(),
     adminClient
       .from("trend_results")
-      .select("trend_result_id, trend_type, trend_scope, trend_key, period, amount_type, amount_value, presentation_amount, account_type, reporting_model")
+      .select("trend_result_id, trend_type, trend_scope, trend_key, period, amount_type, amount_value, presentation_amount, fund_code, acfr_code, department_code, function_code, object_code, account_type, reporting_model")
       .eq("organization_id", organizationId)
       .eq("calculation_run_id", calculationRunId)
       .order("period", { ascending: true })
@@ -477,19 +486,25 @@ async function loadDashboardOutput({
       .returns<MappingCoverageRow[]>()
   ]);
 
-  return {
-    exceptions: filterExceptionRows(exceptions.data ?? [], selection),
-    financialSummaries: filterFinancialRows(financialSummaries.data ?? [], selection),
-    mappingCoverage: filterMappingRows(mappingCoverage.data ?? [], selection),
-    statementSummaries: filterStatementRows(statementSummaries.data ?? [], selection),
-    trends: trends.data ?? [],
-    variances: filterVarianceRows(variances.data ?? [], selection)
-  };
+  return applyDashboardSelectionFilters(
+    {
+      exceptions: exceptions.data ?? [],
+      filterNotes: [],
+      financialSummaries: financialSummaries.data ?? [],
+      mappingCoverage: mappingCoverage.data ?? [],
+      statementSummaries: statementSummaries.data ?? [],
+      trends: trends.data ?? [],
+      variances: variances.data ?? []
+    },
+    selection,
+    options
+  );
 }
 
 function emptyOutput(): DashboardOutput {
   return {
     exceptions: [],
+    filterNotes: [],
     financialSummaries: [],
     mappingCoverage: [],
     statementSummaries: [],
@@ -498,45 +513,165 @@ function emptyOutput(): DashboardOutput {
   };
 }
 
-function filterFinancialRows(rows: FinancialSummaryRow[], selection: DashboardSelection) {
-  return rows.filter((row) => {
-    if (selection.fund && row.fund_code !== selection.fund) return false;
-    if (selection.department && row.department_code !== selection.department) return false;
-    if (selection.functionCode && row.function_code !== selection.functionCode) return false;
-    if (selection.acfr && row.acfr_code !== selection.acfr) return false;
-    if (selection.accountType && row.account_type !== selection.accountType) return false;
-    if (
-      selection.statementLine &&
-      row.activity_statement_line !== selection.statementLine &&
-      row.balance_sheet_line !== selection.statementLine
-    ) {
-      return false;
-    }
-    return true;
-  });
+function applyDashboardSelectionFilters(
+  output: DashboardOutput,
+  selection: DashboardSelection,
+  options: DashboardOptions
+): DashboardOutput {
+  const filterContext = buildFilterContext(selection, options);
+  const filterNotes: string[] = [];
+  const financialSummaries = filterFinancialRows(
+    output.financialSummaries,
+    selection,
+    filterContext
+  );
+  const statementSummaries = filterStatementRows(
+    output.statementSummaries,
+    selection,
+    filterNotes
+  );
+  const variances = filterVarianceRows(
+    output.variances,
+    selection,
+    filterContext,
+    filterNotes
+  );
+  const trends = filterTrendRows(
+    output.trends,
+    selection,
+    filterContext,
+    filterNotes
+  );
+  const exceptions = filterExceptionRows(
+    output.exceptions,
+    selection,
+    filterContext,
+    filterNotes
+  );
+  const mappingCoverage = filterMappingRows(
+    output.mappingCoverage,
+    selection,
+    filterContext,
+    filterNotes
+  );
+
+  return {
+    exceptions,
+    filterNotes: uniqueText(filterNotes),
+    financialSummaries,
+    mappingCoverage,
+    statementSummaries,
+    trends,
+    variances
+  };
 }
 
-function filterStatementRows(rows: StatementSummaryRow[], selection: DashboardSelection) {
-  return rows.filter((row) => {
-    if (!selection.statementLine) return true;
-    return (
-      row.line_item_code === selection.statementLine ||
-      row.line_item_name === selection.statementLine ||
-      row.line_name === selection.statementLine
-    );
-  });
+function buildFilterContext(selection: DashboardSelection, options: DashboardOptions) {
+  return {
+    fundCodesForGroup: new Set(
+      selection.fundGroup
+        ? options.funds
+            .filter((fund) => fund.fund_group === selection.fundGroup)
+            .map((fund) => fund.fund_code)
+        : []
+    )
+  };
 }
 
-function filterVarianceRows(rows: VarianceRow[], selection: DashboardSelection) {
+function filterFinancialRows(
+  rows: FinancialSummaryRow[],
+  selection: DashboardSelection,
+  filterContext: ReturnType<typeof buildFilterContext>
+) {
   return rows
     .filter((row) => {
-      if (selection.fund && row.fund_code !== selection.fund) return false;
-      if (selection.department && row.department_code !== selection.department) return false;
-      if (selection.functionCode && row.function_code !== selection.functionCode) return false;
-      if (selection.acfr && row.acfr_code !== selection.acfr) return false;
-      if (selection.accountType && row.account_type !== selection.accountType) return false;
+      if (selection.fund && !financialRowMatchesDimension(row, "fund", selection.fund)) {
+        return false;
+      }
+
+      if (
+        selection.fundGroup &&
+        !financialRowMatchesAnyDimension(row, "fund", filterContext.fundCodesForGroup)
+      ) {
+        return false;
+      }
+
+      if (
+        selection.department &&
+        !financialRowMatchesDimension(row, "department", selection.department)
+      ) {
+        return false;
+      }
+
+      if (
+        selection.functionCode &&
+        !financialRowMatchesDimension(row, "function", selection.functionCode)
+      ) {
+        return false;
+      }
+
+      if (selection.acfr && !financialRowMatchesDimension(row, "acfr", selection.acfr)) {
+        return false;
+      }
+
+      if (
+        selection.accountType &&
+        !financialRowMatchesDimension(row, "account_type", selection.accountType)
+      ) {
+        return false;
+      }
+
+      if (
+        selection.statementLine &&
+        !financialRowMatchesDimension(row, "balance_sheet_line", selection.statementLine) &&
+        !financialRowMatchesDimension(row, "activity_statement_line", selection.statementLine)
+      ) {
+        return false;
+      }
+
       return true;
     })
+    .map((row) => ({ ...row }));
+}
+
+function filterStatementRows(
+  rows: StatementSummaryRow[],
+  selection: DashboardSelection,
+  filterNotes: string[]
+) {
+  if (hasDimensionSelection(selection)) {
+    filterNotes.push(
+      "Statement summary rows can only be filtered by Statement Line because this calculation output does not include fund, department, function, ACFR, or account-type detail."
+    );
+  }
+
+  return rows
+    .filter((row) => {
+      if (!selection.statementLine) return true;
+      return (
+        row.line_item_code === selection.statementLine ||
+        row.line_item_name === selection.statementLine ||
+        row.line_name === selection.statementLine
+      );
+    })
+    .map((row) => ({ ...row }));
+}
+
+function filterVarianceRows(
+  rows: VarianceRow[],
+  selection: DashboardSelection,
+  filterContext: ReturnType<typeof buildFilterContext>,
+  filterNotes: string[]
+) {
+  const filtered = filterDimensionRows({
+    filterContext,
+    filterNotes,
+    label: "Variance",
+    rows,
+    selection
+  });
+
+  return filtered
     .sort((a, b) => {
       if (selection.sort === "largest_percent") {
         return Math.abs(amount(b.variance_percent)) - Math.abs(amount(a.variance_percent));
@@ -546,25 +681,321 @@ function filterVarianceRows(rows: VarianceRow[], selection: DashboardSelection) 
     .slice(0, selection.topN);
 }
 
-function filterExceptionRows(rows: ExceptionRow[], selection: DashboardSelection) {
-  return rows.filter((row) => {
+function filterTrendRows(
+  rows: TrendRow[],
+  selection: DashboardSelection,
+  filterContext: ReturnType<typeof buildFilterContext>,
+  filterNotes: string[]
+) {
+  const filtered = filterDimensionRows({
+    filterContext,
+    filterNotes,
+    label: "Trend",
+    rows,
+    selection
+  });
+
+  return filtered
+    .sort(
+      (a, b) =>
+        Math.abs(amount(b.presentation_amount ?? b.amount_value)) -
+        Math.abs(amount(a.presentation_amount ?? a.amount_value))
+    )
+    .slice(0, selection.topN);
+}
+
+function filterExceptionRows(
+  rows: ExceptionRow[],
+  selection: DashboardSelection,
+  filterContext: ReturnType<typeof buildFilterContext>,
+  filterNotes: string[]
+) {
+  return filterDimensionRows({
+    filterContext,
+    filterNotes,
+    keepGlobalRows: true,
+    label: "Exception",
+    rows,
+    selection
+  }).filter((row) => {
     if (selection.exceptionSeverity && row.severity_level !== selection.exceptionSeverity) {
       return false;
     }
-    if (selection.fund && row.fund_code !== selection.fund) return false;
-    if (selection.department && row.department_code !== selection.department) return false;
-    if (selection.functionCode && row.function_code !== selection.functionCode) return false;
-    if (selection.acfr && row.acfr_code !== selection.acfr) return false;
-    if (selection.accountType && row.account_type !== selection.accountType) return false;
     return true;
   });
 }
 
-function filterMappingRows(rows: MappingCoverageRow[], selection: DashboardSelection) {
+function filterMappingRows(
+  rows: MappingCoverageRow[],
+  selection: DashboardSelection,
+  filterContext: ReturnType<typeof buildFilterContext>,
+  filterNotes: string[]
+) {
   return rows.filter((row) => {
-    if (!selection.exceptionSeverity) return true;
-    return row.severity === selection.exceptionSeverity;
+    if (selection.exceptionSeverity && row.severity !== selection.exceptionSeverity) {
+      return false;
+    }
+
+    if (selection.fund) {
+      if (row.segment_type === "fund") return row.segment_code === selection.fund;
+      if (isHighPriorityMappingIssue(row)) {
+        filterNotes.push(
+          "Global or non-fund mapping coverage issues remain visible because they may still affect the selected fund."
+        );
+        return true;
+      }
+      return false;
+    }
+
+    if (selection.fundGroup) {
+      if (row.segment_type === "fund") {
+        return Boolean(row.segment_code && filterContext.fundCodesForGroup.has(row.segment_code));
+      }
+      if (isHighPriorityMappingIssue(row)) {
+        filterNotes.push(
+          "Global or non-fund mapping coverage issues remain visible because they may still affect the selected fund group."
+        );
+        return true;
+      }
+      return false;
+    }
+
+    if (selection.department && row.segment_type === "department") {
+      return row.segment_code === selection.department;
+    }
+
+    if (selection.department) {
+      if (isHighPriorityMappingIssue(row)) {
+        filterNotes.push(
+          "Global or non-department mapping coverage issues remain visible because they may still affect the selected department."
+        );
+        return true;
+      }
+      return false;
+    }
+
+    if (selection.functionCode && row.segment_type === "function") {
+      return row.segment_code === selection.functionCode;
+    }
+
+    if (selection.functionCode) {
+      if (isHighPriorityMappingIssue(row)) {
+        filterNotes.push(
+          "Global or non-function mapping coverage issues remain visible because they may still affect the selected function."
+        );
+        return true;
+      }
+      return false;
+    }
+
+    if (selection.acfr && row.segment_type === "acfr") {
+      return row.segment_code === selection.acfr;
+    }
+
+    if (selection.acfr) {
+      if (isHighPriorityMappingIssue(row)) {
+        filterNotes.push(
+          "Global or non-ACFR mapping coverage issues remain visible because they may still affect the selected ACFR filter."
+        );
+        return true;
+      }
+      return false;
+    }
+
+    if (selection.accountType || selection.statementLine) {
+      filterNotes.push(
+        "Mapping coverage rows cannot be filtered by Account Type or Statement Line because mapping coverage is stored by reference segment."
+      );
+    }
+
+    return true;
   });
+}
+
+function filterDimensionRows<
+  T extends {
+    acfr_code: string | null;
+    account_type: string | null;
+    department_code: string | null;
+    function_code: string | null;
+    fund_code: string | null;
+  }
+>({
+  filterContext,
+  filterNotes,
+  keepGlobalRows = false,
+  label,
+  rows,
+  selection
+}: {
+  filterContext: ReturnType<typeof buildFilterContext>;
+  filterNotes: string[];
+  keepGlobalRows?: boolean;
+  label: string;
+  rows: T[];
+  selection: DashboardSelection;
+}) {
+  const selectedDimensions = getSelectedRowDimensions(selection);
+
+  for (const dimension of selectedDimensions) {
+    if (!rows.some((row) => hasRowDimension(row, dimension.field))) {
+      filterNotes.push(
+        `${label} rows cannot be filtered by ${dimension.label} because this calculation output does not include ${dimension.label.toLowerCase()} detail for those rows.`
+      );
+    }
+  }
+
+  return rows
+    .filter((row) => {
+      if (selection.fund && !matchesRowDimension(row, "fund_code", selection.fund, keepGlobalRows)) {
+        return false;
+      }
+
+      if (
+        selection.fundGroup &&
+        !matchesAnyRowDimension(
+          row,
+          "fund_code",
+          filterContext.fundCodesForGroup,
+          keepGlobalRows
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        selection.department &&
+        !matchesRowDimension(row, "department_code", selection.department, keepGlobalRows)
+      ) {
+        return false;
+      }
+
+      if (
+        selection.functionCode &&
+        !matchesRowDimension(row, "function_code", selection.functionCode, keepGlobalRows)
+      ) {
+        return false;
+      }
+
+      if (selection.acfr && !matchesRowDimension(row, "acfr_code", selection.acfr, keepGlobalRows)) {
+        return false;
+      }
+
+      if (
+        selection.accountType &&
+        !matchesRowDimension(row, "account_type", selection.accountType, keepGlobalRows)
+      ) {
+        return false;
+      }
+
+      return true;
+    })
+    .map((row) => ({ ...row }));
+}
+
+function financialRowMatchesDimension(
+  row: FinancialSummaryRow,
+  dimension: string,
+  value: string
+) {
+  const dimensionField = getFinancialDimensionField(row);
+  if (dimensionField !== getFinancialFieldForDimension(dimension)) return false;
+  return getFinancialDimensionValue(row, dimension) === value;
+}
+
+function financialRowMatchesAnyDimension(
+  row: FinancialSummaryRow,
+  dimension: string,
+  values: Set<string>
+) {
+  const dimensionField = getFinancialDimensionField(row);
+  const value = getFinancialDimensionValue(row, dimension);
+  return dimensionField === getFinancialFieldForDimension(dimension) &&
+    Boolean(value && values.has(value));
+}
+
+function getFinancialDimensionField(row: FinancialSummaryRow) {
+  const dimensionField = row.result_payload?.dimension_field;
+  return typeof dimensionField === "string" ? dimensionField : null;
+}
+
+function getFinancialFieldForDimension(dimension: string) {
+  const fields: Record<string, string> = {
+    account_type: "account_type",
+    acfr: "acfr_code",
+    activity_statement_line: "activity_statement_line",
+    balance_sheet_line: "balance_sheet_line",
+    department: "department_code",
+    fund: "fund_code",
+    function: "function_code"
+  };
+  return fields[dimension] ?? dimension;
+}
+
+function getFinancialDimensionValue(row: FinancialSummaryRow, dimension: string) {
+  if (dimension === "fund") return row.fund_code ?? row.summary_key;
+  if (dimension === "department") return row.department_code ?? row.summary_key;
+  if (dimension === "function") return row.function_code ?? row.summary_key;
+  if (dimension === "acfr") return row.acfr_code ?? row.summary_key;
+  if (dimension === "account_type") return row.account_type ?? row.summary_key;
+  if (dimension === "balance_sheet_line") return row.balance_sheet_line ?? row.summary_key;
+  if (dimension === "activity_statement_line") return row.activity_statement_line ?? row.summary_key;
+  return row.summary_key;
+}
+
+function getSelectedRowDimensions(selection: DashboardSelection) {
+  return [
+    selection.fund ? { field: "fund_code" as const, label: "Fund" } : null,
+    selection.fundGroup ? { field: "fund_code" as const, label: "Fund Group" } : null,
+    selection.department ? { field: "department_code" as const, label: "Department" } : null,
+    selection.functionCode ? { field: "function_code" as const, label: "Function" } : null,
+    selection.acfr ? { field: "acfr_code" as const, label: "ACFR" } : null,
+    selection.accountType ? { field: "account_type" as const, label: "Account Type" } : null
+  ].filter((dimension): dimension is NonNullable<typeof dimension> => Boolean(dimension));
+}
+
+function hasDimensionSelection(selection: DashboardSelection) {
+  return Boolean(
+    selection.fund ||
+      selection.fundGroup ||
+      selection.department ||
+      selection.functionCode ||
+      selection.acfr ||
+      selection.accountType
+  );
+}
+
+function hasRowDimension<T extends Record<string, unknown>>(
+  row: T,
+  field: keyof T
+) {
+  return Boolean(text(row[field]));
+}
+
+function matchesRowDimension<T extends Record<string, unknown>>(
+  row: T,
+  field: keyof T,
+  value: string,
+  keepGlobalRows: boolean
+) {
+  const rowValue = text(row[field]);
+  if (!rowValue) return keepGlobalRows;
+  return rowValue === value;
+}
+
+function matchesAnyRowDimension<T extends Record<string, unknown>>(
+  row: T,
+  field: keyof T,
+  values: Set<string>,
+  keepGlobalRows: boolean
+) {
+  const rowValue = text(row[field]);
+  if (!rowValue) return keepGlobalRows;
+  return values.has(rowValue);
+}
+
+function isHighPriorityMappingIssue(row: MappingCoverageRow) {
+  return row.severity === "Critical" || row.severity === "High";
 }
 
 export function amount(value: number | string | null | undefined) {

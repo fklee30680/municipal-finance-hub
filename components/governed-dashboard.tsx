@@ -268,6 +268,10 @@ export function DataReadinessBanner({
             value={calculationRun?.posting_run_ids?.length ?? 0}
           />
         </div>
+        <div className="rounded-md border border-border bg-card px-3 py-2 text-sm">
+          <span className="font-medium text-foreground">Active filters: </span>
+          <span className="text-muted-foreground">{formatActiveFilters(selection)}</span>
+        </div>
         {!calculationRun ? (
           <div className="space-y-3">
             <p className="text-sm font-medium text-foreground">
@@ -308,18 +312,77 @@ export function DataReadinessBanner({
   );
 }
 
-export function SummaryCards({ output }: { output: DashboardOutput }) {
-  const all = output.financialSummaries.find((row) => row.summary_key === "all");
-  const revenue = findSummary(output, ["revenue", "revenues"]);
-  const expenditures = findSummary(output, ["expenditure", "expenditures", "expense", "expenses"]);
-  const cash = findSummary(output, ["cash", "cash_and_investments", "cash investments"]);
+export function DashboardFilterNotes({ notes }: { notes: string[] }) {
+  if (notes.length === 0) return null;
+
+  return (
+    <Card className="border-amber-200 bg-amber-50/70">
+      <CardContent className="space-y-2 pt-6">
+        {notes.map((note) => (
+          <p className="text-sm text-amber-950" key={note}>
+            {note}
+          </p>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function SummaryCards({
+  output,
+  selection
+}: {
+  output: DashboardOutput;
+  selection: DashboardSelection;
+}) {
+  const fundRows = output.financialSummaries.filter((row) => row.summary_type === "fund");
+  const hasFundDisplayFilter = Boolean(selection.fund || selection.fundGroup);
+  const all = hasFundDisplayFilter
+    ? null
+    : output.financialSummaries.find((row) => row.summary_key === "all");
+  const revenue = hasFundDisplayFilter ? null : findSummary(output, ["revenue", "revenues"]);
+  const expenditures = hasFundDisplayFilter
+    ? null
+    : findSummary(output, ["expenditure", "expenditures", "expense", "expenses"]);
+  const cash = hasFundDisplayFilter
+    ? null
+    : findSummary(output, ["cash", "cash_and_investments", "cash investments"]);
+  const fundNetChange =
+    hasFundDisplayFilter && fundRows.length > 0
+      ? fundRows.reduce(
+          (total, row) => total + numericAmount(row.presentation_amount ?? row.net_change),
+          0
+        )
+      : null;
 
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <MetricCard label="Net change" value={formatAmount(all?.presentation_amount ?? all?.net_change)} />
-      <MetricCard label="Total revenues" value={formatAmount(revenue?.presentation_amount)} />
-      <MetricCard label="Total expenditures / expenses" value={formatAmount(expenditures?.presentation_amount)} />
-      <MetricCard label="Cash / investments" value={cash ? formatAmount(cash.ending_balance ?? cash.presentation_amount) : "Not available"} />
+      <MetricCard
+        helper={hasFundDisplayFilter ? "Selected fund filter" : undefined}
+        label="Net change"
+        value={
+          hasFundDisplayFilter
+            ? fundNetChange === null
+              ? "Not available"
+              : formatAmount(fundNetChange)
+            : formatAmount(all?.presentation_amount ?? all?.net_change)
+        }
+      />
+      <MetricCard
+        helper={hasFundDisplayFilter ? "Not shown from global totals" : undefined}
+        label="Total revenues"
+        value={revenue ? formatAmount(revenue.presentation_amount) : "Not available"}
+      />
+      <MetricCard
+        helper={hasFundDisplayFilter ? "Not shown from global totals" : undefined}
+        label="Total expenditures / expenses"
+        value={expenditures ? formatAmount(expenditures.presentation_amount) : "Not available"}
+      />
+      <MetricCard
+        helper={hasFundDisplayFilter ? "Not shown from global totals" : undefined}
+        label="Cash / investments"
+        value={cash ? formatAmount(cash.ending_balance ?? cash.presentation_amount) : "Not available"}
+      />
     </div>
   );
 }
@@ -516,7 +579,15 @@ function Info({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function MetricCard({
+  helper,
+  label,
+  value
+}: {
+  helper?: string;
+  label: string;
+  value: string;
+}) {
   return (
     <Card>
       <CardContent className="space-y-1 pt-6">
@@ -524,6 +595,7 @@ function MetricCard({ label, value }: { label: string; value: string }) {
           {label}
         </p>
         <p className="text-2xl font-semibold text-foreground">{value}</p>
+        {helper ? <p className="text-xs text-muted-foreground">{helper}</p> : null}
       </CardContent>
     </Card>
   );
@@ -623,6 +695,28 @@ function findSummary(output: DashboardOutput, keys: string[]) {
   return output.financialSummaries.find((row) =>
     normalizedKeys.has(String(row.summary_key ?? "").toLowerCase())
   );
+}
+
+function formatActiveFilters(selection: DashboardSelection) {
+  const filters = [
+    selection.fund ? `Fund ${selection.fund}` : null,
+    selection.fundGroup ? `Fund Group ${selection.fundGroup}` : null,
+    selection.department ? `Department ${selection.department}` : null,
+    selection.functionCode ? `Function ${selection.functionCode}` : null,
+    selection.acfr ? `ACFR ${selection.acfr}` : null,
+    selection.accountType ? `Account Type ${titleize(selection.accountType)}` : null,
+    selection.statementLine ? `Statement Line ${selection.statementLine}` : null,
+    selection.exceptionSeverity ? `Exception Severity ${selection.exceptionSeverity}` : null,
+    selection.topN !== 10 ? `Top ${selection.topN}` : null,
+    selection.sort !== "largest_amount" ? `Sort ${titleize(selection.sort)}` : null
+  ].filter(Boolean);
+
+  return filters.length > 0 ? filters.join("; ") : "None";
+}
+
+function numericAmount(value: number | string | null | undefined) {
+  const numeric = typeof value === "number" ? value : Number.parseFloat(value ?? "0");
+  return Number.isFinite(numeric) ? numeric : 0;
 }
 
 function formatReportingScope(value: string) {

@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import {
   DashboardFilterBar,
+  DashboardFilterNotes,
   DashboardNav,
   DataReadinessBanner,
   ExceptionsView,
@@ -95,12 +96,13 @@ export async function GovernedDashboardPage({
           output={model.output}
           selection={model.selection}
         />
+        <DashboardFilterNotes notes={model.output.filterNotes} />
 
         {model.calculationRun ? (
           <>
             {view === "cfo_overview" ? (
               <>
-                <SummaryCards output={model.output} />
+                <SummaryCards output={model.output} selection={model.selection} />
                 <div className="grid gap-6 xl:grid-cols-2">
                   <VariancesView output={{ ...model.output, variances: model.output.variances.slice(0, 10) }} />
                   <ExceptionsView

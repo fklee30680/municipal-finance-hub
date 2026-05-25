@@ -33,6 +33,10 @@ type FiscalPeriodOption = {
   fiscal_period_id: string;
   fiscal_year: number;
   fiscal_year_id: string;
+  importStatus: "available" | "in_progress" | "posted";
+  importStatusLabel: string;
+  inProgressImportBatchId: string | null;
+  inProgressImportCount: number;
   period: number;
   period_name: string;
   start_date: string;
@@ -209,16 +213,7 @@ export default async function TrialBalanceImportPage({
     warningsAcknowledged: latestValidation?.warnings_acknowledged
   };
   const nextAction = getNextImportWorkflowAction(workflowSnapshot);
-  const defaultPeriod =
-    data.periods.find(
-      (period) =>
-        period.close_status === "open" &&
-        !period.activeImportBatchId &&
-        period.period >= 0
-    ) ??
-    data.periods.find((period) => period.close_status === "open") ??
-    data.periods[0] ??
-    null;
+  const defaultPeriod = getDefaultTrialBalancePeriod(data.periods);
   const showLayoutSetup =
     params.changeLayout === "true" || !data.defaultLayout || Boolean(
       selectedSourceFile && !selectedBatch?.template_version_id
@@ -368,6 +363,8 @@ export default async function TrialBalanceImportPage({
                 fiscalPeriodId: period.fiscal_period_id,
                 fiscalYear: period.fiscal_year,
                 fiscalYearId: period.fiscal_year_id,
+                importStatus: period.importStatus,
+                importStatusLabel: period.importStatusLabel,
                 label: formatPeriodLabel(period),
                 period: period.period
               }))}
@@ -686,9 +683,14 @@ export default async function TrialBalanceImportPage({
                     </p>
                     <p className="text-muted-foreground">{period.period_name}</p>
                     <p className="text-muted-foreground">
-                      {period.activeImportBatchId ? "Posted" : "Not posted"} -{" "}
-                      {period.close_status}
+                      {period.importStatusLabel} - {period.close_status}
                     </p>
+                    {period.inProgressImportCount > 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        {period.inProgressImportCount} import
+                        {period.inProgressImportCount === 1 ? "" : "s"} in progress
+                      </p>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -718,7 +720,7 @@ async function loadTrialBalanceData({
 
   const [
     periodsResult,
-    activeBatchesResult,
+    periodBatchesResult,
     accountStructuresResult,
     recentBatchesResult,
     defaultLayoutResult
@@ -747,16 +749,18 @@ async function loadTrialBalanceData({
       >(),
     adminClient
       .from("import_batches")
-      .select("import_batch_id, fiscal_year, period")
+      .select("import_batch_id, fiscal_year, period, batch_status, is_active_for_reporting, reporting_status")
       .eq("organization_id", organizationId)
-      .eq("is_active_for_reporting", true)
-      .eq("reporting_status", "included")
-      .in("batch_status", ["posted", "posted_with_exceptions"])
+      .eq("import_type_id", importType?.import_type_id ?? "00000000-0000-0000-0000-000000000000")
+      .not("batch_status", "in", "(inactive,superseded,archived,rejected)")
       .returns<
         Array<{
+          batch_status: string;
           fiscal_year: number | null;
           import_batch_id: string;
+          is_active_for_reporting: boolean;
           period: number | null;
+          reporting_status: string | null;
         }>
       >(),
     adminClient
@@ -836,13 +840,39 @@ async function loadTrialBalanceData({
       : Promise.resolve({ data: null })
   ]);
 
-  const activeByPeriod = new Map<string, string>();
-  for (const batch of activeBatchesResult.data ?? []) {
+  const statusByPeriod = new Map<
+    string,
+    {
+      activeImportBatchId: string | null;
+      inProgressImportBatchId: string | null;
+      inProgressImportCount: number;
+      importStatus: FiscalPeriodOption["importStatus"];
+    }
+  >();
+  for (const batch of periodBatchesResult.data ?? []) {
     if (batch.fiscal_year !== null && batch.period !== null) {
-      activeByPeriod.set(
-        `${batch.fiscal_year}:${batch.period}`,
-        batch.import_batch_id
-      );
+      const key = `${batch.fiscal_year}:${batch.period}`;
+      const current = statusByPeriod.get(key) ?? {
+        activeImportBatchId: null,
+        importStatus: "available" as const,
+        inProgressImportBatchId: null,
+        inProgressImportCount: 0
+      };
+
+      if (
+        batch.is_active_for_reporting &&
+        batch.reporting_status === "included" &&
+        ["posted", "posted_with_exceptions"].includes(batch.batch_status)
+      ) {
+        current.activeImportBatchId = batch.import_batch_id;
+        current.importStatus = "posted";
+      } else if (current.importStatus !== "posted") {
+        current.inProgressImportBatchId ??= batch.import_batch_id;
+        current.inProgressImportCount += 1;
+        current.importStatus = "in_progress";
+      }
+
+      statusByPeriod.set(key, current);
     }
   }
 
@@ -860,14 +890,24 @@ async function loadTrialBalanceData({
     accountStructures: accountStructuresResult.data ?? [],
     defaultLayout: defaultLayoutResult.data ?? null,
     importType,
-    periods: (periodsResult.data ?? []).map((period) => ({
-      ...period,
-      activeImportBatchId:
-        activeByPeriod.get(`${period.fiscal_year}:${period.period}`) ?? null,
-      activePostedCount: activeByPeriod.has(`${period.fiscal_year}:${period.period}`)
-        ? 1
-        : 0
-    })) satisfies FiscalPeriodOption[],
+    periods: (periodsResult.data ?? []).map((period) => {
+      const status = statusByPeriod.get(`${period.fiscal_year}:${period.period}`) ?? {
+        activeImportBatchId: null,
+        importStatus: "available" as const,
+        inProgressImportBatchId: null,
+        inProgressImportCount: 0
+      };
+
+      return {
+        ...period,
+        activeImportBatchId: status.activeImportBatchId,
+        activePostedCount: status.activeImportBatchId ? 1 : 0,
+        importStatus: status.importStatus,
+        importStatusLabel: getPeriodImportStatusLabel(status.importStatus),
+        inProgressImportBatchId: status.inProgressImportBatchId,
+        inProgressImportCount: status.inProgressImportCount
+      };
+    }) satisfies FiscalPeriodOption[],
     recentBatches,
     sourceFiles
   };
@@ -1006,7 +1046,38 @@ function buildTrialBalanceHref({
 }
 
 function formatPeriodLabel(period: FiscalPeriodOption) {
-  return `FY ${period.fiscal_year} - Period ${period.period} - ${period.period_name} (${formatDate(period.start_date)} to ${formatDate(period.end_date)})`;
+  return `FY ${period.fiscal_year} - Period ${period.period} - ${period.period_name} - ${period.importStatusLabel} (${formatDate(period.start_date)} to ${formatDate(period.end_date)})`;
+}
+
+function getDefaultTrialBalancePeriod(periods: FiscalPeriodOption[]) {
+  const chronologicalPeriods = [...periods].sort(
+    (left, right) =>
+      left.fiscal_year - right.fiscal_year ||
+      left.period - right.period
+  );
+
+  return (
+    chronologicalPeriods.find(
+      (period) =>
+        period.close_status === "open" &&
+        period.importStatus === "available" &&
+        period.period >= 0
+    ) ??
+    chronologicalPeriods.find(
+      (period) =>
+        period.importStatus === "available" &&
+        period.period >= 0
+    ) ??
+    chronologicalPeriods.find((period) => period.close_status === "open") ??
+    chronologicalPeriods[0] ??
+    null
+  );
+}
+
+function getPeriodImportStatusLabel(status: FiscalPeriodOption["importStatus"]) {
+  if (status === "posted") return "Posted";
+  if (status === "in_progress") return "In Progress";
+  return "Available";
 }
 
 function formatDate(value: string | null | undefined) {

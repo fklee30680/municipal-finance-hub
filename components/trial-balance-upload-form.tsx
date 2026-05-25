@@ -15,6 +15,8 @@ type TrialBalancePeriodOption = {
   fiscalPeriodId: string;
   fiscalYear: number;
   fiscalYearId: string;
+  importStatus: "available" | "in_progress" | "posted";
+  importStatusLabel: string;
   label: string;
   period: number;
 };
@@ -119,7 +121,17 @@ export function TrialBalanceUploadForm({
               <div className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
                 Selected FY {selectedPeriod.fiscalYear}, Period{" "}
                 {selectedPeriod.period}. This file will be stored as a trial
-                balance import for that configured period.
+                balance import for that configured period. Status:{" "}
+                <span className="font-medium text-foreground">
+                  {selectedPeriod.importStatusLabel}
+                </span>
+                .
+                {selectedPeriod.importStatus === "posted"
+                  ? " A posted trial balance already exists; this period will require the replacement workflow after validation."
+                  : null}
+                {selectedPeriod.importStatus === "in_progress"
+                  ? " Another trial balance import already exists for this period. Review in-progress imports before continuing."
+                  : null}
               </div>
             ) : null}
 

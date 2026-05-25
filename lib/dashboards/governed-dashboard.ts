@@ -545,6 +545,9 @@ async function loadDashboardOutput({
     return {
       ...filteredOutput,
       dashboardFacts: filteredFacts,
+      filterNotes: filteredOutput.filterNotes.filter(
+        (note) => !note.startsWith("Statement summary rows can only be filtered")
+      ),
       financialSummaries: buildFinancialSummariesFromFacts({
         calculationRunId,
         facts: filteredFacts

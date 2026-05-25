@@ -329,19 +329,25 @@ export function SummaryCards({
   selection: DashboardSelection;
 }) {
   const fundRows = output.financialSummaries.filter((row) => row.summary_type === "fund");
-  const hasFundDisplayFilter = Boolean(selection.fund || selection.fundGroup);
-  const all = hasFundDisplayFilter
-    ? null
-    : output.financialSummaries.find((row) => row.summary_key === "all");
-  const revenue = hasFundDisplayFilter ? null : findSummary(output, ["revenue", "revenues"]);
-  const expenditures = hasFundDisplayFilter
-    ? null
-    : findSummary(output, ["expenditure", "expenditures", "expense", "expenses"]);
-  const cash = hasFundDisplayFilter
-    ? null
-    : findSummary(output, ["cash", "cash_and_investments", "cash investments"]);
+  const hasDisplayFilter = Boolean(
+    selection.fund ||
+      selection.fundGroup ||
+      selection.department ||
+      selection.functionCode ||
+      selection.acfr ||
+      selection.accountType
+  );
+  const all = output.financialSummaries.find((row) => row.summary_key === "all");
+  const revenue = findSummary(output, ["revenue", "revenues"]);
+  const expenditures = findSummary(output, [
+    "expenditure",
+    "expenditures",
+    "expense",
+    "expenses"
+  ]);
+  const cash = findSummary(output, ["cash", "cash_and_investments", "cash investments"]);
   const fundNetChange =
-    hasFundDisplayFilter && fundRows.length > 0
+    (selection.fund || selection.fundGroup) && fundRows.length > 0
       ? fundRows.reduce(
           (total, row) => total + numericAmount(row.presentation_amount ?? row.net_change),
           0
@@ -351,10 +357,10 @@ export function SummaryCards({
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <MetricCard
-        helper={hasFundDisplayFilter ? "Selected fund filter" : undefined}
+        helper={hasDisplayFilter ? "Selected dashboard filters" : undefined}
         label="Net change"
         value={
-          hasFundDisplayFilter
+          selection.fund || selection.fundGroup
             ? fundNetChange === null
               ? "Not available"
               : formatAmount(fundNetChange)
@@ -362,17 +368,17 @@ export function SummaryCards({
         }
       />
       <MetricCard
-        helper={hasFundDisplayFilter ? "Not shown from global totals" : undefined}
+        helper={hasDisplayFilter ? "Filtered governed facts" : undefined}
         label="Total revenues"
         value={revenue ? formatAmount(revenue.presentation_amount) : "Not available"}
       />
       <MetricCard
-        helper={hasFundDisplayFilter ? "Not shown from global totals" : undefined}
+        helper={hasDisplayFilter ? "Filtered governed facts" : undefined}
         label="Total expenditures / expenses"
         value={expenditures ? formatAmount(expenditures.presentation_amount) : "Not available"}
       />
       <MetricCard
-        helper={hasFundDisplayFilter ? "Not shown from global totals" : undefined}
+        helper={hasDisplayFilter ? "Filtered governed facts" : undefined}
         label="Cash / investments"
         value={cash ? formatAmount(cash.ending_balance ?? cash.presentation_amount) : "Not available"}
       />

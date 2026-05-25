@@ -60,12 +60,24 @@ type EnrichedLine = ActiveTrialBalanceLine & {
   activity_statement_line: string | null;
   account_type: string | null;
   balance_sheet_line: string | null;
+  fund_group: string | null;
   fund_type: string | null;
   include_in_cash_reconciliation: boolean;
   include_in_standard_reporting: boolean;
   reporting_model: string | null;
   reporting_treatment: string;
   reporting_exclusion_reason: string | null;
+};
+
+type ComparisonSet<T extends ActiveTrialBalanceLine> = {
+  priorPeriod: {
+    availability: "available" | "unavailable";
+    lines: T[];
+  };
+  priorYear: {
+    availability: "available" | "partial" | "unavailable";
+    lines: T[];
+  };
 };
 
 type CoverageIssue = {
@@ -83,6 +95,7 @@ type CoverageIssue = {
 };
 
 type ResultRows = {
+  dashboardFacts: Record<string, unknown>[];
   exceptions: Record<string, unknown>[];
   financialSummaries: Record<string, unknown>[];
   mappingCoverage: Record<string, unknown>[];
@@ -165,6 +178,10 @@ export async function runAnalysisCalculation({
       references
     });
     const enrichedLines = enrichLines(scopedCurrentLines, references);
+    const enrichedComparison = enrichComparisonLines({
+      comparison: scopedComparison,
+      references
+    });
     const dependencyManifest = buildDependencyManifest({
       comparison,
       currentLines,
@@ -178,7 +195,7 @@ export async function runAnalysisCalculation({
     });
     const results = buildResults({
       calculationRunId,
-      comparison: scopedComparison,
+      comparison: enrichedComparison,
       coverageIssues,
       enrichedLines,
       request,
@@ -236,6 +253,7 @@ export async function runAnalysisCalculation({
         mapping_coverage_status: mappingCoverageStatus,
         result_counts: {
           exceptions: results.exceptions.length,
+          dashboard_financial_facts: results.dashboardFacts.length,
           financial_summary_results: results.financialSummaries.length,
           mapping_coverage_results: results.mappingCoverage.length,
           statement_summary_results: results.statementSummaries.length,
@@ -360,7 +378,7 @@ async function loadComparisonLines({
   adminClient: SupabaseClient;
   currentLines: ActiveTrialBalanceLine[];
   request: RunCalculationRequest;
-}) {
+}): Promise<ComparisonSet<ActiveTrialBalanceLine>> {
   const priorPeriod = request.periodFrom === request.periodTo ? request.periodTo - 1 : null;
   const priorPeriodLines =
     priorPeriod && priorPeriod >= 1
@@ -552,6 +570,7 @@ function enrichLines(
         object?.balance_sheet_line ?? object?.balance_sheet_category
       ),
       fund_type: textOrNull(fund?.fund_type),
+      fund_group: textOrNull(fund?.fund_group),
       include_in_cash_reconciliation:
         booleanValue(fund?.include_in_cash_reconciliation, false),
       include_in_standard_reporting:
@@ -574,6 +593,25 @@ function filterStandardReportingLines({
     const fund = references.funds.get(text(line.fund_code));
     return booleanValue(fund?.include_in_standard_reporting, true);
   });
+}
+
+function enrichComparisonLines({
+  comparison,
+  references
+}: {
+  comparison: ComparisonSet<ActiveTrialBalanceLine>;
+  references: Awaited<ReturnType<typeof loadReferenceRows>>;
+}): ComparisonSet<EnrichedLine> {
+  return {
+    priorPeriod: {
+      ...comparison.priorPeriod,
+      lines: enrichLines(comparison.priorPeriod.lines, references)
+    },
+    priorYear: {
+      ...comparison.priorYear,
+      lines: enrichLines(comparison.priorYear.lines, references)
+    }
+  };
 }
 
 function filterReportingScopeLines({
@@ -610,10 +648,10 @@ function filterComparisonForReportingScope({
   reportingScope,
   references
 }: {
-  comparison: Awaited<ReturnType<typeof loadComparisonLines>>;
+  comparison: ComparisonSet<ActiveTrialBalanceLine>;
   reportingScope: ReportingScope;
   references: Awaited<ReturnType<typeof loadReferenceRows>>;
-}) {
+}): ComparisonSet<ActiveTrialBalanceLine> {
   return {
     priorPeriod: {
       ...comparison.priorPeriod,
@@ -886,13 +924,19 @@ function buildResults({
   thresholdConfig
 }: {
   calculationRunId: string;
-  comparison: Awaited<ReturnType<typeof loadComparisonLines>>;
+  comparison: ComparisonSet<EnrichedLine>;
   coverageIssues: CoverageIssue[];
   enrichedLines: EnrichedLine[];
   request: RunCalculationRequest;
   thresholdConfig: ThresholdConfig;
 }): ResultRows {
   const importBatchIds = unique(enrichedLines.map((line) => line.import_batch_id));
+  const dashboardFacts = buildDashboardFinancialFacts({
+    calculationRunId,
+    importBatchIds,
+    lines: enrichedLines,
+    request
+  });
   const financialSummaries = buildFinancialSummaries({
     calculationRunId,
     importBatchIds,
@@ -981,6 +1025,7 @@ function buildResults({
   ];
 
   return {
+    dashboardFacts,
     exceptions,
     financialSummaries,
     mappingCoverage,
@@ -988,6 +1033,186 @@ function buildResults({
     trends,
     variances
   };
+}
+
+const DASHBOARD_FACT_GROUPS = [
+  { fields: [] as const, summaryType: "all" },
+  { fields: ["fund_code"] as const, summaryType: "fund" },
+  { fields: ["fund_code", "account_type"] as const, summaryType: "fund_account_type" },
+  {
+    fields: ["fund_code", "activity_statement_line"] as const,
+    summaryType: "fund_activity_statement_line"
+  },
+  {
+    fields: ["fund_code", "balance_sheet_line"] as const,
+    summaryType: "fund_balance_sheet_line"
+  },
+  { fields: ["department_code"] as const, summaryType: "department" },
+  {
+    fields: ["department_code", "account_type"] as const,
+    summaryType: "department_account_type"
+  },
+  { fields: ["function_code"] as const, summaryType: "function" },
+  {
+    fields: ["function_code", "account_type"] as const,
+    summaryType: "function_account_type"
+  },
+  { fields: ["acfr_code"] as const, summaryType: "acfr" },
+  { fields: ["acfr_code", "account_type"] as const, summaryType: "acfr_account_type" },
+  { fields: ["object_code"] as const, summaryType: "object" },
+  { fields: ["account_type"] as const, summaryType: "account_type" },
+  { fields: ["activity_statement_line"] as const, summaryType: "activity_statement_line" },
+  { fields: ["balance_sheet_line"] as const, summaryType: "balance_sheet_line" },
+  {
+    fields: [
+      "fund_code",
+      "department_code",
+      "function_code",
+      "acfr_code",
+      "object_code",
+      "account_type",
+      "activity_statement_line",
+      "balance_sheet_line"
+    ] as const,
+    summaryType: "dashboard_detail"
+  }
+];
+
+type DashboardFactField = (typeof DASHBOARD_FACT_GROUPS)[number]["fields"][number];
+
+function buildDashboardFinancialFacts({
+  calculationRunId,
+  importBatchIds,
+  lines,
+  request
+}: {
+  calculationRunId: string;
+  importBatchIds: string[];
+  lines: EnrichedLine[];
+  request: RunCalculationRequest;
+}) {
+  const rows: Record<string, unknown>[] = [];
+
+  for (const group of DASHBOARD_FACT_GROUPS) {
+    for (const [summaryKey, groupedLines] of groupLinesByFields(lines, group.fields)) {
+      if (group.summaryType !== "all" && group.summaryType !== "dashboard_detail" && !summaryKey) {
+        continue;
+      }
+
+      rows.push(
+        buildDashboardFinancialFactRow({
+          calculationRunId,
+          fields: group.fields,
+          importBatchIds,
+          lines: groupedLines,
+          request,
+          summaryKey: summaryKey || "all",
+          summaryType: group.summaryType
+        })
+      );
+    }
+  }
+
+  return rows;
+}
+
+function buildDashboardFinancialFactRow({
+  calculationRunId,
+  fields,
+  importBatchIds,
+  lines,
+  request,
+  summaryKey,
+  summaryType
+}: {
+  calculationRunId: string;
+  fields: readonly DashboardFactField[];
+  importBatchIds: string[];
+  lines: EnrichedLine[];
+  request: RunCalculationRequest;
+  summaryKey: string;
+  summaryType: string;
+}) {
+  const sample = lines[0];
+  const netChange = sum(lines.map((line) => money(line.net_change)));
+  const accountType = sample?.account_type ?? null;
+
+  return {
+    account_type: sample?.account_type ?? null,
+    activity_statement_line: sample?.activity_statement_line ?? null,
+    acfr_code: sample?.acfr_code ?? null,
+    balance_sheet_line: sample?.balance_sheet_line ?? null,
+    beginning_balance: sum(lines.map((line) => money(line.beginning_balance))),
+    calculation_run_id: calculationRunId,
+    credits: sum(lines.map((line) => money(line.credits))),
+    debits: sum(lines.map((line) => money(line.debits))),
+    department_code: sample?.department_code ?? null,
+    ending_balance: sum(lines.map((line) => money(line.ending_balance))),
+    fiscal_year: request.fiscalYear,
+    function_code: sample?.function_code ?? null,
+    fund_code: sample?.fund_code ?? null,
+    fund_group: sample?.fund_group ?? null,
+    net_change: netChange,
+    object_code: sample?.object_code ?? null,
+    organization_id: request.organizationId,
+    period_from: request.periodFrom,
+    period_to: request.periodTo,
+    presentation_amount: presentationAmount({
+      accountType,
+      amount: netChange,
+      amountType: "activity"
+    }),
+    reporting_model: sample?.reporting_model ?? null,
+    reporting_scope: request.reportingScope ?? "standard",
+    result_payload: {
+      group_fields: fields,
+      line_count: lines.length,
+      trial_balance_import_batch_ids: importBatchIds
+    },
+    row_count: lines.length,
+    summary_key: summaryKey,
+    summary_label: titleize(summaryKey),
+    summary_type: summaryType,
+    time_view: request.timeView
+  };
+}
+
+function groupLinesByFields(
+  lines: EnrichedLine[],
+  fields: readonly DashboardFactField[]
+) {
+  const grouped = new Map<string, EnrichedLine[]>();
+
+  if (fields.length === 0) {
+    grouped.set("all", lines);
+    return grouped;
+  }
+
+  for (const line of lines) {
+    const key = fields
+      .map((field) => text(line[field]) || "not_provided")
+      .join("|");
+    grouped.set(key, [...(grouped.get(key) ?? []), line]);
+  }
+
+  return grouped;
+}
+
+function aggregateLinesByFields(
+  lines: EnrichedLine[],
+  fields: readonly DashboardFactField[]
+) {
+  const grouped = new Map<string, { amount: number; sample: EnrichedLine | undefined }>();
+
+  for (const line of lines) {
+    const key = fields.map((field) => text(line[field]) || "not_provided").join("|");
+    const current = grouped.get(key) ?? { amount: 0, sample: line };
+    current.amount += money(line.net_change);
+    current.sample ??= line;
+    grouped.set(key, current);
+  }
+
+  return grouped;
 }
 
 function buildFinancialSummaries({
@@ -1177,7 +1402,7 @@ function buildVarianceRows({
   thresholdConfig
 }: {
   calculationRunId: string;
-  comparison: Awaited<ReturnType<typeof loadComparisonLines>>;
+  comparison: ComparisonSet<EnrichedLine>;
   currentLines: EnrichedLine[];
   importBatchIds: string[];
   request: RunCalculationRequest;
@@ -1227,7 +1452,7 @@ function buildVarianceForComparison({
 }: {
   calculationRunId: string;
   comparisonFiscalYear: number;
-  comparisonLines: ActiveTrialBalanceLine[];
+  comparisonLines: EnrichedLine[];
   comparisonPeriod: number;
   currentLines: EnrichedLine[];
   importBatchIds: string[];
@@ -1239,37 +1464,67 @@ function buildVarianceForComparison({
     return [];
   }
 
-  const currentByObject = aggregateBy(currentLines, "object_code");
-  const comparisonByObject = aggregateBy(comparisonLines, "object_code");
-  const keys = unique([...currentByObject.keys(), ...comparisonByObject.keys()]);
+  const rows: Record<string, unknown>[] = [];
+  const varianceGroups = [
+    { fields: ["fund_code"] as const, scope: "fund" },
+    { fields: ["fund_code", "object_code"] as const, scope: "fund_object" },
+    { fields: ["fund_code", "account_type"] as const, scope: "fund_account_type" },
+    { fields: ["department_code"] as const, scope: "department" },
+    { fields: ["department_code", "object_code"] as const, scope: "department_object" },
+    { fields: ["function_code"] as const, scope: "function" },
+    { fields: ["function_code", "object_code"] as const, scope: "function_object" },
+    { fields: ["acfr_code"] as const, scope: "acfr" },
+    { fields: ["acfr_code", "object_code"] as const, scope: "acfr_object" },
+    { fields: ["object_code"] as const, scope: "object_code" },
+    { fields: ["account_type"] as const, scope: "account_type" },
+    { fields: ["activity_statement_line"] as const, scope: "activity_statement_line" },
+    { fields: ["balance_sheet_line"] as const, scope: "balance_sheet_line" }
+  ];
 
-  return keys.map((key) => {
-    const currentAmount = currentByObject.get(key) ?? 0;
-    const comparisonAmount = comparisonByObject.get(key) ?? 0;
+  for (const group of varianceGroups) {
+    const currentByKey = aggregateLinesByFields(currentLines, group.fields);
+    const comparisonByKey = aggregateLinesByFields(comparisonLines, group.fields);
+    const keys = unique([...currentByKey.keys(), ...comparisonByKey.keys()]);
+
+    for (const key of keys) {
+      const currentGroup = currentByKey.get(key);
+      const comparisonGroup = comparisonByKey.get(key);
+      const currentAmount = currentGroup?.amount ?? 0;
+      const comparisonAmount = comparisonGroup?.amount ?? 0;
+      const sample = currentGroup?.sample ?? comparisonGroup?.sample;
     const varianceAmount = currentAmount - comparisonAmount;
     const variancePercent =
       Math.abs(comparisonAmount) < thresholdConfig.minimumBaseAmountForPercentageVariance
         ? null
         : varianceAmount / Math.abs(comparisonAmount);
     const absoluteVarianceAmount = Math.abs(varianceAmount);
-    const sample = currentLines.find((line) => (line.object_code ?? "") === key);
 
-    return {
+      rows.push({
       absolute_variance_amount: absoluteVarianceAmount,
       account_type: sample?.account_type ?? null,
+      acfr_code: sample?.acfr_code ?? null,
       calculation_run_id: calculationRunId,
       comparison_amount: comparisonAmount,
       comparison_fiscal_year: comparisonFiscalYear,
       comparison_period: comparisonPeriod,
       comparison_type: varianceType,
       current_amount: currentAmount,
+      department_code: sample?.department_code ?? null,
       fiscal_year: request.fiscalYear,
+      function_code: sample?.function_code ?? null,
+      fund_code: sample?.fund_code ?? null,
       fund_type: sample?.fund_type ?? null,
-      object_code: key,
+      object_code: (group.fields as readonly string[]).includes("object_code")
+        ? sample?.object_code ?? null
+        : null,
       organization_id: request.organizationId,
       period: request.periodTo,
       reporting_model: sample?.reporting_model ?? null,
       result_payload: {
+        activity_statement_line: sample?.activity_statement_line ?? null,
+        balance_sheet_line: sample?.balance_sheet_line ?? null,
+        fund_group: sample?.fund_group ?? null,
+        group_fields: group.fields,
         minimum_base_amount_applied:
           variancePercent === null &&
           Math.abs(comparisonAmount) <
@@ -1284,10 +1539,13 @@ function buildVarianceForComparison({
       variance_amount: varianceAmount,
       variance_key: key || "unmapped_object",
       variance_percent: variancePercent,
-      variance_scope: "object_code",
+      variance_scope: group.scope,
       variance_type: varianceType
-    };
-  });
+      });
+    }
+  }
+
+  return rows;
 }
 
 function buildTrendRows({
@@ -1301,36 +1559,68 @@ function buildTrendRows({
   lines: EnrichedLine[];
   request: RunCalculationRequest;
 }) {
-  const periodGroups = groupEnrichedLines(lines, "period");
-  return [...periodGroups.entries()].map(([period, groupedLines]) => {
-    const amount = sum(groupedLines.map((line) => money(line.net_change)));
-    const sample = groupedLines[0];
-    return {
-      account_type: sample?.account_type ?? null,
-      amount_type: "period_activity",
-      amount_value: amount,
-      calculation_run_id: calculationRunId,
-      fiscal_year: request.fiscalYear,
-      fund_type: sample?.fund_type ?? null,
-      organization_id: request.organizationId,
-      period: Number(period),
-      period_end: request.periodTo,
-      period_start: request.periodFrom,
-      presentation_amount: presentationAmount({
-        accountType: sample?.account_type,
-        amount,
-        amountType: "activity"
-      }),
-      reporting_model: sample?.reporting_model ?? null,
-      trend_key: String(period),
-      trend_payload: {
-        line_count: groupedLines.length
-      },
-      trend_scope: "period",
-      trend_type: request.timeView === "ytd" ? "ytd_trend" : "period_over_period",
-      trial_balance_import_batch_ids: importBatchIds
-    };
-  });
+  const rows: Record<string, unknown>[] = [];
+  const trendGroups = [
+    { fields: [] as const, scope: "period" },
+    { fields: ["fund_code"] as const, scope: "fund_period" },
+    { fields: ["department_code"] as const, scope: "department_period" },
+    { fields: ["function_code"] as const, scope: "function_period" },
+    { fields: ["acfr_code"] as const, scope: "acfr_period" },
+    { fields: ["account_type"] as const, scope: "account_type_period" },
+    { fields: ["activity_statement_line"] as const, scope: "activity_statement_line_period" },
+    { fields: ["balance_sheet_line"] as const, scope: "balance_sheet_line_period" }
+  ];
+
+  for (const group of trendGroups) {
+    const grouped = new Map<string, EnrichedLine[]>();
+
+    for (const line of lines) {
+      const keyParts = [String(line.period), ...group.fields.map((field) => text(line[field]) || "not_provided")];
+      const key = keyParts.join("|");
+      grouped.set(key, [...(grouped.get(key) ?? []), line]);
+    }
+
+    for (const [key, groupedLines] of grouped) {
+      const amount = sum(groupedLines.map((line) => money(line.net_change)));
+      const sample = groupedLines[0];
+      rows.push({
+        account_type: sample?.account_type ?? null,
+        acfr_code: sample?.acfr_code ?? null,
+        amount_type: "period_activity",
+        amount_value: amount,
+        calculation_run_id: calculationRunId,
+        department_code: sample?.department_code ?? null,
+        fiscal_year: request.fiscalYear,
+        function_code: sample?.function_code ?? null,
+        fund_code: sample?.fund_code ?? null,
+        fund_type: sample?.fund_type ?? null,
+        object_code: sample?.object_code ?? null,
+        organization_id: request.organizationId,
+        period: Number(sample?.period ?? request.periodTo),
+        period_end: request.periodTo,
+        period_start: request.periodFrom,
+        presentation_amount: presentationAmount({
+          accountType: sample?.account_type,
+          amount,
+          amountType: "activity"
+        }),
+        reporting_model: sample?.reporting_model ?? null,
+        trend_key: key,
+        trend_payload: {
+          activity_statement_line: sample?.activity_statement_line ?? null,
+          balance_sheet_line: sample?.balance_sheet_line ?? null,
+          fund_group: sample?.fund_group ?? null,
+          group_fields: group.fields,
+          line_count: groupedLines.length
+        },
+        trend_scope: group.scope,
+        trend_type: request.timeView === "ytd" ? "ytd_trend" : "period_over_period",
+        trial_balance_import_batch_ids: importBatchIds
+      });
+    }
+  }
+
+  return rows;
 }
 
 function buildAvailabilityExceptions({
@@ -1401,6 +1691,15 @@ function buildVarianceExceptions({
         calculationRunId,
         category: "variance",
         currentAmount: Number(variance.current_amount ?? 0),
+        dimensions: {
+          account_type: textOrNull(variance.account_type),
+          acfr_code: textOrNull(variance.acfr_code),
+          department_code: textOrNull(variance.department_code),
+          function_code: textOrNull(variance.function_code),
+          fund_code: textOrNull(variance.fund_code),
+          object_code: textOrNull(variance.object_code),
+          reporting_model: textOrNull(variance.reporting_model)
+        },
         importBatchIds,
         message: `Object ${variance.object_code ?? "unmapped"} has a material ${variance.variance_type} change.`,
         organizationId: request.organizationId,
@@ -1672,6 +1971,7 @@ function buildExceptionRow({
   calculationRunId,
   category,
   currentAmount,
+  dimensions,
   importBatchIds,
   message,
   organizationId,
@@ -1688,6 +1988,15 @@ function buildExceptionRow({
   calculationRunId: string;
   category: string;
   currentAmount?: number;
+  dimensions?: {
+    account_type?: string | null;
+    acfr_code?: string | null;
+    department_code?: string | null;
+    function_code?: string | null;
+    fund_code?: string | null;
+    object_code?: string | null;
+    reporting_model?: string | null;
+  };
   importBatchIds: string[];
   message: string;
   organizationId: string;
@@ -1714,11 +2023,17 @@ function buildExceptionRow({
     exception_status: "open",
     exception_type: type,
     fiscal_year: request.fiscalYear,
-    fund_code: segmentType === "fund" ? segmentCode ?? null : null,
+    account_type: dimensions?.account_type ?? null,
+    acfr_code: dimensions?.acfr_code ?? null,
+    department_code: dimensions?.department_code ?? null,
+    function_code: dimensions?.function_code ?? null,
+    fund_code: dimensions?.fund_code ?? (segmentType === "fund" ? segmentCode ?? null : null),
     message,
+    object_code: dimensions?.object_code ?? null,
     organization_id: organizationId,
     period,
     recommended_review_action: recommendedAction,
+    reporting_model: dimensions?.reporting_model ?? null,
     result_payload: {
       recommended_action: recommendedAction
     },
@@ -1737,6 +2052,7 @@ async function persistResults({
   adminClient: SupabaseClient;
   results: ResultRows;
 }) {
+  await insertIfAny(adminClient, "dashboard_financial_facts", results.dashboardFacts);
   await insertIfAny(adminClient, "mapping_coverage_results", results.mappingCoverage);
   await insertIfAny(adminClient, "financial_summary_results", results.financialSummaries);
   await insertIfAny(adminClient, "statement_summary_results", results.statementSummaries);
@@ -1989,18 +2305,6 @@ function groupEnrichedLines<T extends keyof EnrichedLine>(
   for (const line of lines) {
     const key = String(line[field] ?? "");
     groups.set(key, [...(groups.get(key) ?? []), line]);
-  }
-  return groups;
-}
-
-function aggregateBy<T extends ActiveTrialBalanceLine | EnrichedLine>(
-  lines: T[],
-  field: keyof T
-) {
-  const groups = new Map<string, number>();
-  for (const line of lines) {
-    const key = String(line[field] ?? "");
-    groups.set(key, (groups.get(key) ?? 0) + money(line.net_change));
   }
   return groups;
 }

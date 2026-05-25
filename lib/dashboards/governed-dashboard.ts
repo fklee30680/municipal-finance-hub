@@ -536,12 +536,22 @@ async function loadDashboardOutput({
 
   if (facts.length > 0) {
     const filteredFacts = filterDashboardFacts(facts, selection);
+    const factFilterNotes =
+      filteredFacts.length === 0 && hasDimensionSelection(selection)
+        ? [
+            "No dashboard financial facts matched the selected reference filters for this calculation run. Rerun calculation if this selection should have posted activity."
+          ]
+        : [];
+
     return {
       ...filteredOutput,
       dashboardFacts: filteredFacts,
-      filterNotes: filteredOutput.filterNotes.filter(
-        (note) => !note.startsWith("Statement summary rows can only be filtered")
-      ),
+      filterNotes: uniqueText([
+        ...filteredOutput.filterNotes.filter(
+          (note) => !note.startsWith("Statement summary rows can only be filtered")
+        ),
+        ...factFilterNotes
+      ]),
       financialSummaries: buildFinancialSummariesFromFacts({
         calculationRunId,
         facts: filteredFacts
@@ -596,6 +606,8 @@ function buildFinancialSummariesFromFacts({
   calculationRunId: string;
   facts: DashboardFinancialFactRow[];
 }): FinancialSummaryRow[] {
+  if (facts.length === 0) return [];
+
   const rows: FinancialSummaryRow[] = [
     buildFinancialRowFromFacts({
       calculationRunId,

@@ -1047,19 +1047,49 @@ const DASHBOARD_FACT_GROUPS = [
     fields: ["fund_code", "balance_sheet_line"] as const,
     summaryType: "fund_balance_sheet_line"
   },
+  { fields: ["fund_group"] as const, summaryType: "fund_group" },
+  {
+    fields: ["fund_group", "account_type"] as const,
+    summaryType: "fund_group_account_type"
+  },
   { fields: ["department_code"] as const, summaryType: "department" },
   {
     fields: ["department_code", "account_type"] as const,
     summaryType: "department_account_type"
+  },
+  {
+    fields: ["department_code", "activity_statement_line"] as const,
+    summaryType: "department_activity_statement_line"
+  },
+  {
+    fields: ["department_code", "balance_sheet_line"] as const,
+    summaryType: "department_balance_sheet_line"
   },
   { fields: ["function_code"] as const, summaryType: "function" },
   {
     fields: ["function_code", "account_type"] as const,
     summaryType: "function_account_type"
   },
+  {
+    fields: ["function_code", "activity_statement_line"] as const,
+    summaryType: "function_activity_statement_line"
+  },
+  {
+    fields: ["function_code", "balance_sheet_line"] as const,
+    summaryType: "function_balance_sheet_line"
+  },
   { fields: ["acfr_code"] as const, summaryType: "acfr" },
   { fields: ["acfr_code", "account_type"] as const, summaryType: "acfr_account_type" },
+  {
+    fields: ["acfr_code", "activity_statement_line"] as const,
+    summaryType: "acfr_activity_statement_line"
+  },
+  {
+    fields: ["acfr_code", "balance_sheet_line"] as const,
+    summaryType: "acfr_balance_sheet_line"
+  },
   { fields: ["object_code"] as const, summaryType: "object" },
+  { fields: ["object_code", "account_type"] as const, summaryType: "object_account_type" },
   { fields: ["account_type"] as const, summaryType: "account_type" },
   { fields: ["activity_statement_line"] as const, summaryType: "activity_statement_line" },
   { fields: ["balance_sheet_line"] as const, summaryType: "balance_sheet_line" },
@@ -2052,6 +2082,7 @@ async function persistResults({
   adminClient: SupabaseClient;
   results: ResultRows;
 }) {
+  await deleteExistingDashboardFacts(adminClient, results.dashboardFacts);
   await insertIfAny(adminClient, "dashboard_financial_facts", results.dashboardFacts);
   await insertIfAny(adminClient, "mapping_coverage_results", results.mappingCoverage);
   await insertIfAny(adminClient, "financial_summary_results", results.financialSummaries);
@@ -2059,6 +2090,26 @@ async function persistResults({
   await insertIfAny(adminClient, "variance_results", results.variances);
   await insertIfAny(adminClient, "trend_results", results.trends);
   await insertIfAny(adminClient, "exception_results", results.exceptions);
+}
+
+async function deleteExistingDashboardFacts(
+  adminClient: SupabaseClient,
+  rows: Record<string, unknown>[]
+) {
+  const sample = rows[0];
+  const organizationId = text(sample?.organization_id);
+  const calculationRunId = text(sample?.calculation_run_id);
+  if (!organizationId || !calculationRunId) return;
+
+  const result = await adminClient
+    .from("dashboard_financial_facts")
+    .delete()
+    .eq("organization_id", organizationId)
+    .eq("calculation_run_id", calculationRunId);
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
 }
 
 async function insertIfAny(

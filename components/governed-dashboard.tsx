@@ -336,19 +336,19 @@ export function SummaryCards({
           0
         )
       : null;
+  const netChange =
+    selection.fund || selection.fundGroup
+      ? fundNetChange === null
+        ? null
+        : fundNetChange
+      : all?.presentation_amount ?? all?.net_change ?? null;
 
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <MetricCard
         helper={hasDisplayFilter ? "Selected dashboard filters" : undefined}
         label="Net change"
-        value={
-          selection.fund || selection.fundGroup
-            ? fundNetChange === null
-              ? "Not available"
-              : formatAmount(fundNetChange)
-            : formatAmount(all?.presentation_amount ?? all?.net_change)
-        }
+        value={netChange === null ? "Not available" : formatAmount(netChange)}
       />
       <MetricCard
         helper={hasDisplayFilter ? "Filtered governed facts" : undefined}

@@ -451,28 +451,38 @@ export default async function TrialBalanceImportPage({
                 </p>
               ) : null}
               {latestPreview ? (
-                <div className="grid gap-4 text-sm md:grid-cols-4">
-                  <InfoItem label="Rows detected" value={latestPreview.row_count} />
-                  <InfoItem label="Rows previewed" value={latestPreview.previewed_row_count} />
-                  <InfoItem
-                    label="Preview issues"
-                    value={latestPreview.rows_with_preview_issues}
-                  />
-                  <InfoItem
-                    label="Ending balance total"
-                    value={formatAmount(latestPreview.total_ending_balance)}
-                  />
-                  <InfoItem
-                    label="Beginning balance total"
-                    value={formatAmount(latestPreview.total_beginning_balance)}
-                  />
-                  <InfoItem label="Debit total" value={formatAmount(latestPreview.total_debits)} />
-                  <InfoItem label="Credit total" value={formatAmount(latestPreview.total_credits)} />
-                  <InfoItem
-                    label="Net change total"
-                    value={formatAmount(latestPreview.total_net_change)}
-                  />
-                </div>
+                <>
+                  <div className="grid gap-4 text-sm md:grid-cols-4">
+                    <InfoItem label="Rows detected" value={latestPreview.row_count} />
+                    <InfoItem label="Rows previewed" value={latestPreview.previewed_row_count} />
+                    <InfoItem
+                      label="Preview issues"
+                      value={latestPreview.rows_with_preview_issues}
+                    />
+                    <InfoItem
+                      label="Ending balance total"
+                      value={formatAmount(latestPreview.total_ending_balance)}
+                    />
+                    <InfoItem
+                      label="Beginning balance total"
+                      value={formatAmount(latestPreview.total_beginning_balance)}
+                    />
+                    <InfoItem label="Debit total" value={formatAmount(latestPreview.total_debits)} />
+                    <InfoItem label="Credit total" value={formatAmount(latestPreview.total_credits)} />
+                    <InfoItem
+                      label="Net change total"
+                      value={formatAmount(latestPreview.total_net_change)}
+                    />
+                  </div>
+                  <Link
+                    className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                    href={`/imports/${selectedBatch.import_batch_id}/preview`}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Review Preview Rows
+                  </Link>
+                </>
               ) : null}
             </div>
           ) : (
@@ -526,6 +536,14 @@ export default async function TrialBalanceImportPage({
                       validationRunId={latestValidation.validation_run_id}
                     />
                   ) : null}
+                  <Link
+                    className="inline-flex items-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                    href={`/imports/${selectedBatch.import_batch_id}/validation`}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    View Trial Balance Integrity Checks
+                  </Link>
                 </>
               ) : null}
             </div>

@@ -5,10 +5,13 @@ import { DashboardRunCalculationForm } from "@/components/dashboard-run-calculat
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   type CalculationRun,
+  type DashboardFinancialFactRow,
   type DashboardOptions,
   type DashboardOutput,
   type DashboardSelection,
   type DashboardView,
+  type ExceptionRow,
+  type MappingCoverageRow,
   formatAmount,
   formatDate,
   formatPercent,
@@ -304,14 +307,13 @@ export function DashboardFilterNotes({ notes }: { notes: string[] }) {
   );
 }
 
-export function SummaryCards({
+export function ExecutiveFinancialPositionView({
   output,
   selection
 }: {
   output: DashboardOutput;
   selection: DashboardSelection;
 }) {
-  const fundRows = output.financialSummaries.filter((row) => row.summary_type === "fund");
   const hasDisplayFilter = Boolean(
     selection.fund ||
       selection.fundGroup ||
@@ -320,54 +322,70 @@ export function SummaryCards({
       selection.acfr ||
       selection.accountType
   );
-  const all = output.financialSummaries.find((row) => row.summary_key === "all");
-  const revenue = findSummary(output, ["revenue", "revenues"]);
-  const expenditures = findSummary(output, [
-    "expenditure",
-    "expenditures",
-    "expense",
-    "expenses"
-  ]);
-  const cash = findSummary(output, ["cash", "cash_and_investments", "cash investments"]);
-  const fundNetChange =
-    (selection.fund || selection.fundGroup) && fundRows.length > 0
-      ? fundRows.reduce(
-          (total, row) => total + numericAmount(row.presentation_amount ?? row.net_change),
-          0
-        )
-      : null;
-  const netChange =
-    selection.fund || selection.fundGroup
-      ? fundNetChange === null
-        ? null
-        : fundNetChange
-      : all?.presentation_amount ?? all?.net_change ?? null;
+  const facts = output.dashboardFacts;
+  const totals = summarizeFacts(facts);
+  const helper = hasDisplayFilter ? "Selected dashboard filters" : "Governed dashboard facts";
+
+  if (facts.length === 0) {
+    return <DashboardFactsEmptyState hasDisplayFilter={hasDisplayFilter} />;
+  }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <MetricCard
-        helper={hasDisplayFilter ? "Selected dashboard filters" : undefined}
-        label="Net change"
-        value={netChange === null ? "Not available" : formatAmount(netChange)}
-      />
-      <MetricCard
-        helper={hasDisplayFilter ? "Filtered governed facts" : undefined}
-        label="Total revenues"
-        value={revenue ? formatAmount(revenue.presentation_amount) : "Not available"}
-      />
-      <MetricCard
-        helper={hasDisplayFilter ? "Filtered governed facts" : undefined}
-        label="Total expenditures / expenses"
-        value={expenditures ? formatAmount(expenditures.presentation_amount) : "Not available"}
-      />
-      <MetricCard
-        helper={hasDisplayFilter ? "Filtered governed facts" : undefined}
-        label="Cash / investments"
-        value={cash ? formatAmount(cash.ending_balance ?? cash.presentation_amount) : "Not available"}
-      />
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          helper={helper}
+          label="Beginning balance"
+          value={formatAmount(totals.beginningBalance)}
+        />
+        <MetricCard
+          helper={helper}
+          label="Revenues"
+          value={formatMaybeAmount(totals.revenues)}
+        />
+        <MetricCard
+          helper={helper}
+          label="Expenditures / expenses"
+          value={formatMaybeAmount(totals.expenditures)}
+        />
+        <MetricCard
+          helper={helper}
+          label="Other financing sources"
+          value={formatMaybeAmount(totals.otherFinancingSources)}
+        />
+        <MetricCard
+          helper={helper}
+          label="Other financing uses"
+          value={formatMaybeAmount(totals.otherFinancingUses)}
+        />
+        <MetricCard
+          helper={helper}
+          label="Net change"
+          value={formatAmount(totals.netChange)}
+        />
+        <MetricCard
+          helper={helper}
+          label="Ending balance"
+          value={formatAmount(totals.endingBalance)}
+        />
+        <MetricCard
+          helper={
+            totals.cashAndInvestments === null
+              ? "Cash / investments not available from current classifications."
+              : helper
+          }
+          label="Cash / investments"
+          value={formatMaybeAmount(totals.cashAndInvestments)}
+        />
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Active filters: {formatActiveFilters(selection)}
+      </p>
     </div>
   );
 }
+
+export const SummaryCards = ExecutiveFinancialPositionView;
 
 export function FinancialStatementsView({ output }: { output: DashboardOutput }) {
   return (
@@ -409,40 +427,63 @@ export function FinancialStatementsView({ output }: { output: DashboardOutput })
 }
 
 export function FundsView({ output }: { output: DashboardOutput }) {
-  const rows = output.financialSummaries.filter((row) => row.summary_type === "fund");
+  const rows = buildFundPerformanceRows(output);
+
+  if (output.dashboardFacts.length === 0) {
+    return <DashboardFactsEmptyState hasDisplayFilter={false} />;
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Fund Summary</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div className="space-y-4">
+      <SectionPanel title="Fund Summary">
         <SimpleTable
           empty="No fund-level summary rows are available for this calculation."
           rows={rows}
           columns={[
-            ["Fund", (row) => row.summary_key],
-            ["Beginning", (row) => formatAmount(row.beginning_balance)],
-            ["Net Change", (row) => formatAmount(row.presentation_amount ?? row.net_change)],
-            ["Ending", (row) => formatAmount(row.ending_balance)]
+            ["Fund", (row) => row.fund],
+            ["Fund Group", (row) => row.fundGroup ?? "Not provided"],
+            ["Beginning", (row) => formatAmount(row.beginningBalance)],
+            ["Revenues", (row) => formatMaybeAmount(row.revenues)],
+            ["Expenditures", (row) => formatMaybeAmount(row.expenditures)],
+            ["OFS", (row) => formatMaybeAmount(row.otherFinancingSources)],
+            ["OFU", (row) => formatMaybeAmount(row.otherFinancingUses)],
+            ["Net Change", (row) => formatAmount(row.netChange)],
+            ["Ending", (row) => formatAmount(row.endingBalance)],
+            ["Exceptions", (row) => row.exceptionCount],
+            ["Readiness Issues", (row) => row.mappingIssueCount]
           ]}
         />
-      </CardContent>
-    </Card>
+      </SectionPanel>
+    </div>
   );
 }
 
-export function VariancesView({ output }: { output: DashboardOutput }) {
+export function MaterialChangesView({
+  output,
+  selection
+}: {
+  output: DashboardOutput;
+  selection: DashboardSelection;
+}) {
+  const fundMovements = buildFundPerformanceRows(output)
+    .sort((a, b) => Math.abs(b.netChange) - Math.abs(a.netChange))
+    .slice(0, selection.topN);
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Largest Variances</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div className="space-y-6">
+      <SectionPanel
+        title={`Material variance rows (${formatMaterialSort(selection.sort)}, Top ${selection.topN})`}
+      >
         <SimpleTable
-          empty="No variance rows are available for this calculation."
+          empty="No governed variance rows are available for this calculation and filter selection."
           rows={output.variances}
           columns={[
             ["Object", (row) => row.object_code ?? row.variance_key],
+            ["Fund", (row) => row.fund_code ?? "Global"],
+            ["Department", (row) => row.department_code ?? "Global"],
+            ["Function", (row) => row.function_code ?? "Global"],
+            ["ACFR", (row) => row.acfr_code ?? "Global"],
+            ["Account Type", (row) => titleize(row.account_type ?? "not classified")],
             ["Type", (row) => titleize(row.variance_type ?? "variance")],
             ["Current", (row) => formatAmount(row.current_amount)],
             ["Comparison", (row) => formatAmount(row.comparison_amount)],
@@ -451,57 +492,92 @@ export function VariancesView({ output }: { output: DashboardOutput }) {
             ["Severity", (row) => row.severity ?? "Not classified"]
           ]}
         />
-      </CardContent>
-    </Card>
+      </SectionPanel>
+      <SectionPanel title={`Largest fund-level net changes (Top ${selection.topN})`}>
+        <SimpleTable
+          empty="No fund-level dashboard facts are available for this calculation."
+          rows={fundMovements}
+          columns={[
+            ["Fund", (row) => row.fund],
+            ["Fund Group", (row) => row.fundGroup ?? "Not provided"],
+            ["Net Change", (row) => formatAmount(row.netChange)],
+            ["Revenues", (row) => formatMaybeAmount(row.revenues)],
+            ["Expenditures", (row) => formatMaybeAmount(row.expenditures)]
+          ]}
+        />
+      </SectionPanel>
+    </div>
   );
 }
 
-export function ExceptionsView({ output }: { output: DashboardOutput }) {
+export const VariancesView = MaterialChangesView;
+
+export function ExceptionsView({
+  compact = false,
+  output
+}: {
+  compact?: boolean;
+  output: DashboardOutput;
+}) {
+  const criticalExceptions = output.exceptions.filter((row) => row.severity_level === "Critical");
+  const warningExceptions = output.exceptions.filter((row) => row.severity_level === "Warning");
+  const missingReferenceRows = output.mappingCoverage.filter((row) =>
+    row.coverage_issue_type.toLowerCase().includes("missing")
+  );
+  const inactiveRows = output.mappingCoverage.filter((row) =>
+    row.coverage_issue_type.toLowerCase().includes("inactive")
+  );
+  const incompleteRows = output.mappingCoverage.filter((row) =>
+    row.coverage_issue_type.toLowerCase().includes("incomplete")
+  );
+  const integrityRows = output.exceptions.filter(
+    (row) => row.exception_category === "trial_balance_integrity"
+  );
+  const period13Rows = output.exceptions.filter((row) =>
+    `${row.exception_category ?? ""} ${row.exception_type ?? ""} ${row.message ?? ""}`
+      .toLowerCase()
+      .includes("period 13")
+  );
+  const mappingRows = compact ? output.mappingCoverage.slice(0, 8) : output.mappingCoverage;
+  const exceptionRows = compact ? output.exceptions.slice(0, 8) : output.exceptions;
+
   return (
-    <div className="grid gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Exceptions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SimpleTable
-            empty="No exception rows are available for this calculation."
-            rows={output.exceptions}
-            columns={[
-              ["Severity", (row) => row.severity_level ?? "Not classified"],
-              ["Category", (row) => titleize(row.exception_category ?? "exception")],
-              ["Type", (row) => titleize(row.exception_type ?? "review")],
-              ["Message", (row) => row.message ?? "No message"],
-              ["Action", (row) => row.recommended_review_action ?? "Review calculation output"]
-            ]}
-          />
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Mapping Coverage</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SimpleTable
-            empty="No mapping coverage issues are available for this calculation."
-            rows={output.mappingCoverage}
-            columns={[
-              ["Severity", (row) => row.severity],
-              ["Segment", (row) => `${row.segment_type}: ${row.segment_code ?? "Not provided"}`],
-              ["Reference", (row) => row.reference_table],
-              ["Issue", (row) => titleize(row.coverage_issue_type)],
-              ["Rows", (row) => row.affected_row_count],
-              ["Amount", (row) => formatAmount(row.affected_amount)],
-              [
-                "Action",
-                (row) => (
-                  <ReferenceLink referenceTable={row.reference_table} segmentCode={row.segment_code} />
-                )
-              ]
-            ]}
-          />
-        </CardContent>
-      </Card>
+    <div className="space-y-6">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MiniStat label="Critical exceptions" value={criticalExceptions.length} />
+        <MiniStat label="Warnings" value={warningExceptions.length} />
+        <MiniStat label="Mapping issues" value={output.mappingCoverage.length} />
+        <MiniStat label="Missing references" value={missingReferenceRows.length} />
+      </div>
+      <SectionPanel title="Critical exceptions">
+        <ExceptionTable rows={compact ? criticalExceptions.slice(0, 8) : criticalExceptions} />
+      </SectionPanel>
+      <SectionPanel title="Warnings">
+        <ExceptionTable rows={compact ? warningExceptions.slice(0, 8) : warningExceptions} />
+      </SectionPanel>
+      <SectionPanel title="Mapping coverage issues">
+        <MappingCoverageTable rows={mappingRows} />
+      </SectionPanel>
+      <SectionPanel title="Missing reference data">
+        <MappingCoverageTable rows={compact ? missingReferenceRows.slice(0, 8) : missingReferenceRows} />
+      </SectionPanel>
+      <SectionPanel title="Inactive reference rows used">
+        <MappingCoverageTable rows={compact ? inactiveRows.slice(0, 8) : inactiveRows} />
+      </SectionPanel>
+      <SectionPanel title="Incomplete classifications">
+        <MappingCoverageTable rows={compact ? incompleteRows.slice(0, 8) : incompleteRows} />
+      </SectionPanel>
+      <SectionPanel title="Trial balance integrity">
+        <ExceptionTable rows={compact ? integrityRows.slice(0, 8) : integrityRows} />
+      </SectionPanel>
+      <SectionPanel title="Period 13 close verification">
+        <ExceptionTable rows={compact ? period13Rows.slice(0, 8) : period13Rows} />
+      </SectionPanel>
+      {compact && (output.exceptions.length > exceptionRows.length || output.mappingCoverage.length > mappingRows.length) ? (
+        <p className="text-sm text-muted-foreground">
+          CFO Overview shows a shortened readiness view. Open Exceptions for the full list.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -523,6 +599,207 @@ export function TraceabilityCard({ calculationRun }: { calculationRun: Calculati
       </CardContent>
     </Card>
   );
+}
+
+function DashboardFactsEmptyState({ hasDisplayFilter }: { hasDisplayFilter: boolean }) {
+  return (
+    <div className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
+      {hasDisplayFilter
+        ? "No governed facts match the selected filters."
+        : "This calculation run does not have dashboard-ready facts. Apply the dashboard facts migration if needed, then rerun calculation for this dashboard selection."}
+    </div>
+  );
+}
+
+function ExceptionTable({ rows }: { rows: ExceptionRow[] }) {
+  return (
+    <SimpleTable
+      empty="No rows in this section."
+      rows={rows}
+      columns={[
+        ["Severity", (row) => row.severity_level ?? "Not classified"],
+        ["Category", (row) => titleize(row.exception_category ?? "exception")],
+        ["Type", (row) => titleize(row.exception_type ?? "review")],
+        ["Fund", (row) => row.fund_code ?? "Global"],
+        ["Object", (row) => row.object_code ?? "Not provided"],
+        ["Department", (row) => row.department_code ?? "Not provided"],
+        ["Function", (row) => row.function_code ?? "Not provided"],
+        ["ACFR", (row) => row.acfr_code ?? "Not provided"],
+        ["Account Type", (row) => titleize(row.account_type ?? "not classified")],
+        ["Amount", (row) => formatAmount(row.current_amount)],
+        ["Message", (row) => row.message ?? "No message"],
+        ["Action", (row) => row.recommended_review_action ?? "Review calculation output"]
+      ]}
+    />
+  );
+}
+
+function MappingCoverageTable({ rows }: { rows: MappingCoverageRow[] }) {
+  return (
+    <SimpleTable
+      empty="No rows in this section."
+      rows={rows}
+      columns={[
+        ["Severity", (row) => row.severity],
+        ["Segment", (row) => `${row.segment_type}: ${row.segment_code ?? "Not provided"}`],
+        ["Reference", (row) => row.reference_table],
+        ["Status", (row) => titleize(row.reference_status)],
+        ["Issue", (row) => titleize(row.coverage_issue_type)],
+        ["Rows", (row) => row.affected_row_count],
+        ["Amount", (row) => formatAmount(row.affected_amount)],
+        ["Message", (row) => row.message],
+        ["Action", (row) => (
+          <div className="space-y-1">
+            <ReferenceLink referenceTable={row.reference_table} segmentCode={row.segment_code} />
+            {row.recommended_action ? (
+              <p className="text-xs text-muted-foreground">{row.recommended_action}</p>
+            ) : null}
+          </div>
+        )]
+      ]}
+    />
+  );
+}
+
+function SectionPanel({
+  children,
+  title
+}: {
+  children: ReactNode;
+  title: string;
+}) {
+  return (
+    <section className="space-y-3 rounded-md border border-border bg-background p-4">
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-md border border-border bg-background p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 text-xl font-semibold text-foreground">{value}</p>
+    </div>
+  );
+}
+
+type FactSummary = {
+  beginningBalance: number;
+  cashAndInvestments: number | null;
+  endingBalance: number;
+  expenditures: number | null;
+  netChange: number;
+  otherFinancingSources: number | null;
+  otherFinancingUses: number | null;
+  revenues: number | null;
+};
+
+type FundPerformanceRow = FactSummary & {
+  exceptionCount: number;
+  fund: string;
+  fundGroup: string | null;
+  mappingIssueCount: number;
+};
+
+function buildFundPerformanceRows(output: DashboardOutput): FundPerformanceRow[] {
+  const groups = new Map<string, DashboardFinancialFactRow[]>();
+
+  for (const fact of output.dashboardFacts) {
+    const fund = fact.fund_code;
+    if (!fund) continue;
+    groups.set(fund, [...(groups.get(fund) ?? []), fact]);
+  }
+
+  return [...groups.entries()]
+    .map(([fund, facts]) => ({
+      ...summarizeFacts(facts),
+      exceptionCount: output.exceptions.filter((row) => row.fund_code === fund).length,
+      fund,
+      fundGroup: facts.find((fact) => fact.fund_group)?.fund_group ?? null,
+      mappingIssueCount: output.mappingCoverage.filter(
+        (row) => row.segment_type === "fund" && row.segment_code === fund
+      ).length
+    }))
+    .sort((a, b) => a.fund.localeCompare(b.fund));
+}
+
+function summarizeFacts(facts: DashboardFinancialFactRow[]): FactSummary {
+  const revenues = sumCategory(facts, isRevenueType);
+  const expenditures = sumCategory(facts, isExpenditureType);
+  const otherFinancingSources = sumCategory(facts, isOtherFinancingSourceType);
+  const otherFinancingUses = sumCategory(facts, isOtherFinancingUseType);
+  const cashFacts = facts.filter(isCashOrInvestmentFact);
+
+  return {
+    beginningBalance: sumFactAmount(facts, "beginning_balance"),
+    cashAndInvestments:
+      cashFacts.length > 0 ? sumFactAmount(cashFacts, "ending_balance") : null,
+    endingBalance: sumFactAmount(facts, "ending_balance"),
+    expenditures,
+    netChange: sumFactAmount(facts, "presentation_amount"),
+    otherFinancingSources,
+    otherFinancingUses,
+    revenues
+  };
+}
+
+function sumCategory(
+  facts: DashboardFinancialFactRow[],
+  predicate: (accountType: string) => boolean
+) {
+  const matching = facts.filter((fact) => predicate(normalizeKey(fact.account_type)));
+  return matching.length > 0 ? sumFactAmount(matching, "presentation_amount") : null;
+}
+
+function sumFactAmount(
+  facts: DashboardFinancialFactRow[],
+  field: keyof Pick<
+    DashboardFinancialFactRow,
+    "beginning_balance" | "ending_balance" | "net_change" | "presentation_amount"
+  >
+) {
+  return facts.reduce((total, fact) => total + numericAmount(fact[field]), 0);
+}
+
+function isRevenueType(value: string) {
+  return value === "revenue" || value === "revenues";
+}
+
+function isExpenditureType(value: string) {
+  return value === "expenditure" || value === "expenditures" || value === "expense" || value === "expenses";
+}
+
+function isOtherFinancingSourceType(value: string) {
+  return value === "other_financing_source" || value === "other_financing_sources" || value === "transfer_in" || value === "transfers_in";
+}
+
+function isOtherFinancingUseType(value: string) {
+  return value === "other_financing_use" || value === "other_financing_uses" || value === "transfer_out" || value === "transfers_out";
+}
+
+function isCashOrInvestmentFact(fact: DashboardFinancialFactRow) {
+  const balanceLine = normalizeKey(fact.balance_sheet_line);
+  const activityLine = normalizeKey(fact.activity_statement_line);
+  const accountType = normalizeKey(fact.account_type);
+  return (
+    balanceLine.includes("cash") ||
+    balanceLine.includes("investment") ||
+    activityLine.includes("cash") ||
+    accountType === "cash" ||
+    accountType === "cash_and_investments"
+  );
+}
+
+function formatMaybeAmount(value: number | null) {
+  return value === null ? "Not available" : formatAmount(value);
+}
+
+function formatMaterialSort(value: string) {
+  return value === "largest_percent" ? "largest percent variance" : "largest dollar variance";
 }
 
 function Select({
@@ -689,13 +966,6 @@ function getCodeParam(referenceTable: string) {
   return params[referenceTable] ?? "code";
 }
 
-function findSummary(output: DashboardOutput, keys: string[]) {
-  const normalizedKeys = new Set(keys.map((key) => key.toLowerCase()));
-  return output.financialSummaries.find((row) =>
-    normalizedKeys.has(String(row.summary_key ?? "").toLowerCase())
-  );
-}
-
 export function formatActiveFilters(selection: DashboardSelection) {
   const filters = [
     selection.fund ? `Fund ${selection.fund}` : null,
@@ -714,6 +984,14 @@ export function formatActiveFilters(selection: DashboardSelection) {
 function numericAmount(value: number | string | null | undefined) {
   const numeric = typeof value === "number" ? value : Number.parseFloat(value ?? "0");
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function normalizeKey(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replaceAll(" ", "_")
+    .replaceAll("-", "_");
 }
 
 export function formatReportingScope(value: string) {

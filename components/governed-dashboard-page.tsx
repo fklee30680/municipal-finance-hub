@@ -12,9 +12,9 @@ import {
   formatActiveFilters,
   formatReportingScope,
   FundsView,
-  SummaryCards,
+  MaterialChangesView,
+  ExecutiveFinancialPositionView,
   TraceabilityCard,
-  VariancesView
 } from "@/components/governed-dashboard";
 import { ensureAppUserForAuthUser } from "@/lib/auth/app-user";
 import { requireUser } from "@/lib/auth/session";
@@ -143,7 +143,10 @@ export async function GovernedDashboardPage({
         >
           {model.calculationRun ? (
             <>
-              <SummaryCards output={model.output} selection={model.selection} />
+              <ExecutiveFinancialPositionView
+                output={model.output}
+                selection={model.selection}
+              />
               {view === "financial_statements" ? (
                 <div className="mt-6">
                   <FinancialStatementsView output={model.output} />
@@ -170,19 +173,10 @@ export async function GovernedDashboardPage({
           summary={formatExceptionSummary(issueCounts)}
           title="Exceptions and Data Quality"
         >
-          {model.calculationRun && (view === "cfo_overview" || view === "exceptions") ? (
+          {model.calculationRun ? (
             <ExceptionsView
-              output={{
-                ...model.output,
-                exceptions:
-                  view === "cfo_overview"
-                    ? model.output.exceptions.slice(0, 10)
-                    : model.output.exceptions,
-                mappingCoverage:
-                  view === "cfo_overview"
-                    ? model.output.mappingCoverage.slice(0, 10)
-                    : model.output.mappingCoverage
-              }}
+              compact={view === "cfo_overview"}
+              output={model.output}
             />
           ) : (
             <Placeholder>
@@ -198,8 +192,8 @@ export async function GovernedDashboardPage({
           summary="Top dollar variances, top percent variances, revenue changes, expenditure changes, and fund-level changes."
           title="Material Changes"
         >
-          {model.calculationRun && view === "variances" ? (
-            <VariancesView output={model.output} />
+          {model.calculationRun ? (
+            <MaterialChangesView output={model.output} selection={model.selection} />
           ) : (
             <Placeholder>
               This section will show top dollar variances, top percent variances,
@@ -214,7 +208,7 @@ export async function GovernedDashboardPage({
           summary="Fund-level beginning balance, net change, ending balance, exceptions, and mapping coverage."
           title="Fund Performance"
         >
-          {model.calculationRun && view === "funds" ? (
+          {model.calculationRun ? (
             <FundsView output={model.output} />
           ) : (
             <Placeholder>

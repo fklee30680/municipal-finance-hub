@@ -459,6 +459,8 @@ async function loadActiveTrialBalanceLinesPage({
       .lte("period", periodTo)
       .order("period", { ascending: true })
       .order("fund_code", { ascending: true })
+      .order("full_account_number", { ascending: true })
+      .order("trial_balance_line_id", { ascending: true })
       .range(from, from + pageSize - 1)
       .returns<ActiveTrialBalanceLine[]>();
 
@@ -1191,18 +1193,20 @@ function buildDashboardFinancialFactRow({
   const sample = lines[0];
   const netChange = sum(lines.map((line) => money(line.net_change)));
   const accountType = sample?.account_type ?? null;
+  const beginningBalance = sumPeriodAmount(lines, request.periodFrom, "beginning_balance");
+  const endingBalance = sumPeriodAmount(lines, request.periodTo, "ending_balance");
 
   return {
     account_type: sample?.account_type ?? null,
     activity_statement_line: sample?.activity_statement_line ?? null,
     acfr_code: sample?.acfr_code ?? null,
     balance_sheet_line: sample?.balance_sheet_line ?? null,
-    beginning_balance: sum(lines.map((line) => money(line.beginning_balance))),
+    beginning_balance: beginningBalance,
     calculation_run_id: calculationRunId,
     credits: sum(lines.map((line) => money(line.credits))),
     debits: sum(lines.map((line) => money(line.debits))),
     department_code: sample?.department_code ?? null,
-    ending_balance: sum(lines.map((line) => money(line.ending_balance))),
+    ending_balance: endingBalance,
     fiscal_year: request.fiscalYear,
     function_code: sample?.function_code ?? null,
     fund_code: sample?.fund_code ?? null,
@@ -1220,6 +1224,8 @@ function buildDashboardFinancialFactRow({
     reporting_model: sample?.reporting_model ?? null,
     reporting_scope: request.reportingScope ?? "standard",
     result_payload: {
+      balance_period_from: request.periodFrom,
+      balance_period_to: request.periodTo,
       group_fields: fields,
       line_count: lines.length,
       trial_balance_import_batch_ids: importBatchIds
@@ -1343,7 +1349,8 @@ function buildFinancialSummaryRow({
   summaryKey: string;
   summaryType: string;
 }) {
-  const endingBalance = sum(lines.map((line) => money(line.ending_balance)));
+  const beginningBalance = sumPeriodAmount(lines, request.periodFrom, "beginning_balance");
+  const endingBalance = sumPeriodAmount(lines, request.periodTo, "ending_balance");
   const netChange = sum(lines.map((line) => money(line.net_change)));
   const sample = lines[0];
   const accountType = sample?.account_type ?? null;
@@ -1361,7 +1368,7 @@ function buildFinancialSummaryRow({
     amount_type: amountType,
     amount_value: netChange,
     balance_sheet_line: sample?.balance_sheet_line ?? null,
-    beginning_balance: sum(lines.map((line) => money(line.beginning_balance))),
+    beginning_balance: beginningBalance,
     calculation_run_id: calculationRunId,
     credits: sum(lines.map((line) => money(line.credits))),
     debits: sum(lines.map((line) => money(line.debits))),
@@ -2395,6 +2402,14 @@ function firstNonEmpty<T>(values: Array<T | null | undefined>) {
 
 function sum(values: number[]) {
   return values.reduce((total, value) => total + value, 0);
+}
+
+function sumPeriodAmount(
+  lines: EnrichedLine[],
+  period: number,
+  field: "beginning_balance" | "ending_balance"
+) {
+  return sum(lines.filter((line) => line.period === period).map((line) => money(line[field])));
 }
 
 function money(value: number | string | null | undefined) {

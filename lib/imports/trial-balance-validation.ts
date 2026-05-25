@@ -125,6 +125,8 @@ type FiscalPeriodRecord = {
 
 type ReferenceRecord = {
   code: string;
+  accountType: string | null;
+  name: string | null;
   mappingVersionId: string | null;
 };
 
@@ -144,6 +146,31 @@ type ValidationExceptionDraft = {
   exceptionMessage: string;
   severity: ValidationSeverity;
   suggestedFix: string;
+};
+
+type Period13Handling = "post_closing" | "pre_closing" | "unsure";
+
+type Period13CloseFundAnalysis = {
+  activityAccountTotal: number;
+  balanceSheetAccountTotal: number;
+  classificationCompletenessStatus: string;
+  expenditureOrExpenseTotal: number;
+  explainableByYearEndActivity: boolean;
+  fundCode: string;
+  fundName: string | null;
+  otherFinancingSourceTotal: number;
+  otherFinancingUseTotal: number;
+  revenueTotal: number;
+  rowCount: number;
+  totalEndingBalance: number;
+  transferTotal: number;
+  unknownAccountTotal: number;
+};
+
+type Period13CloseAnalysis = {
+  funds: Period13CloseFundAnalysis[];
+  handling: Period13Handling | null;
+  status: "not_period_13" | "normal_balanced" | "pending_close_verification" | "review_required" | "failed_unexplained";
 };
 
 type ValidationSummary = {
@@ -271,6 +298,7 @@ export async function runTrialBalanceValidation({
   const referenceData = await loadReferenceData({ adminClient, organizationId });
   const mappingVersions = collectMappingVersions(referenceData);
   const exceptions: ValidationExceptionDraft[] = [];
+  const period13Handling = getPeriod13Handling(batch);
 
   validateFileSetup({
     accountStructureId,
@@ -309,9 +337,12 @@ export async function runTrialBalanceValidation({
     previewRows,
     referenceData
   });
-  validateTrialBalanceIntegrity({
+  const period13CloseAnalysis = validateTrialBalanceIntegrity({
+    batch,
     exceptions,
-    previewRows
+    period13Handling,
+    previewRows,
+    referenceData
   });
 
   if (mappingVersions.length === 0) {
@@ -362,6 +393,9 @@ export async function runTrialBalanceValidation({
     validated_by: userId,
     validated_at: new Date().toISOString(),
     metadata: {
+      period_13_close_analysis: period13CloseAnalysis,
+      period_13_close_status: period13CloseAnalysis.status,
+      period_13_handling: period13Handling,
       sign_convention: trialBalanceValidationSignConvention,
       validation_scope: "trial_balance_preview_rows"
     }
@@ -434,6 +468,9 @@ export async function runTrialBalanceValidation({
       metadata: {
         ...(batch.metadata ?? {}),
         latest_validation_run_id: validationRunId,
+        period_13_close_analysis: period13CloseAnalysis,
+        period_13_close_status: period13CloseAnalysis.status,
+        period_13_handling: period13Handling,
         validation_eligible_to_post: summary.eligibleToPost,
         validation_only: true
       }
@@ -1060,23 +1097,102 @@ function validateFinancialFormulas({
 }
 
 function validateTrialBalanceIntegrity({
+  batch,
   exceptions,
-  previewRows
+  period13Handling,
+  previewRows,
+  referenceData
+}: {
+  batch: ImportBatchRecord;
+  exceptions: ValidationExceptionDraft[];
+  period13Handling: Period13Handling | null;
+  previewRows: PreviewRowRecord[];
+  referenceData: Awaited<ReturnType<typeof loadReferenceData>>;
+}): Period13CloseAnalysis {
+  const totals = buildBalanceTotals(previewRows);
+  const isPeriod13 = batch.period === 13;
+  const period13CloseAnalysis = buildPeriod13CloseAnalysis({
+    handling: period13Handling,
+    previewRows,
+    referenceData
+  });
+
+  if (isPeriod13 && period13Handling === "pre_closing") {
+    applyPreClosingPeriod13BalanceValidation({
+      exceptions,
+      period13CloseAnalysis,
+      totals
+    });
+  } else if (isPeriod13 && period13Handling === "unsure") {
+    applyUnsurePeriod13BalanceValidation({
+      exceptions,
+      period13CloseAnalysis,
+      totals
+    });
+  } else {
+    applyStrictBalanceValidation({
+      exceptions,
+      previewRows,
+      totals,
+      period13PostClosing: isPeriod13 && period13Handling === "post_closing"
+    });
+  }
+
+  applyStrictDebitCreditValidation({
+    exceptions,
+    previewRows,
+    totals
+  });
+
+  return period13CloseAnalysis;
+}
+
+function applyStrictBalanceValidation({
+  exceptions,
+  period13PostClosing,
+  previewRows,
+  totals
 }: {
   exceptions: ValidationExceptionDraft[];
+  period13PostClosing?: boolean;
   previewRows: PreviewRowRecord[];
+  totals: ReturnType<typeof buildBalanceTotals>;
 }) {
-  const totals = buildBalanceTotals(previewRows);
-
   if (!amountsTie(totals.endingBalance, 0)) {
     exceptions.push(createException({
       code: "batch_out_of_balance",
-      message: `Trial balance does not balance. Total ending balance nets to ${formatMoney(totals.endingBalance)}.`,
+      message: period13PostClosing
+        ? `Period 13 was marked as post-closing, so this imbalance is a critical validation error. Trial balance does not balance. Total ending balance nets to ${formatMoney(totals.endingBalance)}.`
+        : `Trial balance does not balance. Total ending balance nets to ${formatMoney(totals.endingBalance)}.`,
       targetFieldName: "ending_balance",
       transformedValue: String(totals.endingBalance)
     }));
   }
 
+  for (const [fundCode, fundTotals] of buildFundBalanceTotals(previewRows)) {
+    if (!amountsTie(fundTotals.endingBalance, 0)) {
+      exceptions.push(createException({
+        code: "fund_out_of_balance",
+        message: period13PostClosing
+          ? `Fund ${fundCode} does not balance. Ending balances net to ${formatMoney(fundTotals.endingBalance)}. Period 13 was marked as post-closing, so this imbalance is a critical validation error.`
+          : `Fund ${fundCode} does not balance. Ending balances net to ${formatMoney(fundTotals.endingBalance)}.`,
+        rawValue: fundCode,
+        targetFieldName: "ending_balance",
+        transformedValue: String(fundTotals.endingBalance)
+      }));
+    }
+  }
+}
+
+function applyStrictDebitCreditValidation({
+  exceptions,
+  previewRows,
+  totals
+}: {
+  exceptions: ValidationExceptionDraft[];
+  previewRows: PreviewRowRecord[];
+  totals: ReturnType<typeof buildBalanceTotals>;
+}) {
   if (hasMeaningfulDebitCreditActivity(totals)) {
     const debitCreditDifference = totals.debits - totals.credits;
     if (!amountsTie(debitCreditDifference, 0)) {
@@ -1090,16 +1206,6 @@ function validateTrialBalanceIntegrity({
   }
 
   for (const [fundCode, fundTotals] of buildFundBalanceTotals(previewRows)) {
-    if (!amountsTie(fundTotals.endingBalance, 0)) {
-      exceptions.push(createException({
-        code: "fund_out_of_balance",
-        message: `Fund ${fundCode} does not balance. Ending balances net to ${formatMoney(fundTotals.endingBalance)}.`,
-        rawValue: fundCode,
-        targetFieldName: "ending_balance",
-        transformedValue: String(fundTotals.endingBalance)
-      }));
-    }
-
     if (hasMeaningfulDebitCreditActivity(fundTotals)) {
       const debitCreditDifference = fundTotals.debits - fundTotals.credits;
       if (!amountsTie(debitCreditDifference, 0)) {
@@ -1113,6 +1219,337 @@ function validateTrialBalanceIntegrity({
       }
     }
   }
+}
+
+function applyPreClosingPeriod13BalanceValidation({
+  exceptions,
+  period13CloseAnalysis,
+  totals
+}: {
+  exceptions: ValidationExceptionDraft[];
+  period13CloseAnalysis: Period13CloseAnalysis;
+  totals: ReturnType<typeof buildBalanceTotals>;
+}) {
+  const imbalancedFunds = period13CloseAnalysis.funds.filter(
+    (fund) => !amountsTie(fund.totalEndingBalance, 0)
+  );
+  const unexplainedFunds = imbalancedFunds.filter(
+    (fund) => !isPeriod13FundImbalanceExplainable(fund)
+  );
+
+  if (!amountsTie(totals.endingBalance, 0) && unexplainedFunds.length === 0) {
+    exceptions.push(createPeriod13CloseException({
+      code: "period_13_pending_close_verification",
+      message: `Period 13 pre-closing activity detected. Batch ending balances net to ${formatMoney(totals.endingBalance)} and are pending close verification.`,
+      severity: "warning",
+      transformedValue: String(totals.endingBalance)
+    }));
+  } else if (!amountsTie(totals.endingBalance, 0)) {
+    exceptions.push(createPeriod13CloseException({
+      code: "period_13_unexplained_imbalance",
+      message: `Period 13 imbalance could not be fully explained by nominal/activity accounts. Batch ending balances net to ${formatMoney(totals.endingBalance)}.`,
+      severity: "critical_error",
+      transformedValue: String(totals.endingBalance)
+    }));
+  }
+
+  for (const fund of imbalancedFunds) {
+    if (isPeriod13FundImbalanceExplainable(fund)) {
+      exceptions.push(createPeriod13CloseException({
+        code: "period_13_pending_close_verification",
+        message: `Period 13 pre-closing activity detected for Fund ${fund.fundCode}. Fund ${fund.fundCode} has net year-end activity of ${formatMoney(fund.totalEndingBalance)}. This may represent year-end close activity and is pending close verification.`,
+        rawValue: fund.fundCode,
+        severity: "warning",
+        transformedValue: String(fund.totalEndingBalance)
+      }));
+    } else {
+      exceptions.push(createPeriod13CloseException({
+        code: "period_13_unexplained_imbalance",
+        message: `Period 13 imbalance for Fund ${fund.fundCode} could not be explained by nominal/activity accounts. Ending balances net to ${formatMoney(fund.totalEndingBalance)}.`,
+        rawValue: fund.fundCode,
+        severity: "critical_error",
+        transformedValue: String(fund.totalEndingBalance)
+      }));
+    }
+  }
+
+  period13CloseAnalysis.status =
+    unexplainedFunds.length > 0
+      ? "failed_unexplained"
+      : imbalancedFunds.length > 0
+        ? "pending_close_verification"
+        : "normal_balanced";
+}
+
+function applyUnsurePeriod13BalanceValidation({
+  exceptions,
+  period13CloseAnalysis,
+  totals
+}: {
+  exceptions: ValidationExceptionDraft[];
+  period13CloseAnalysis: Period13CloseAnalysis;
+  totals: ReturnType<typeof buildBalanceTotals>;
+}) {
+  const imbalancedFunds = period13CloseAnalysis.funds.filter(
+    (fund) => !amountsTie(fund.totalEndingBalance, 0)
+  );
+  const unexplainedFunds = imbalancedFunds.filter(
+    (fund) => !isPeriod13FundImbalanceExplainable(fund)
+  );
+
+  if (imbalancedFunds.length === 0 && amountsTie(totals.endingBalance, 0)) {
+    period13CloseAnalysis.status = "normal_balanced";
+    return;
+  }
+
+  if (unexplainedFunds.length > 0) {
+    exceptions.push(createPeriod13CloseException({
+      code: "period_13_unexplained_imbalance",
+      message: `Period 13 handling is marked Unsure, and the imbalance could not be explained by nominal/activity accounts. Batch ending balances net to ${formatMoney(totals.endingBalance)}.`,
+      severity: "critical_error",
+      transformedValue: String(totals.endingBalance)
+    }));
+    period13CloseAnalysis.status = "failed_unexplained";
+    return;
+  }
+
+  exceptions.push(createPeriod13CloseException({
+    code: "period_13_review_required",
+    message: "Period 13 handling is marked Unsure. The file has fund-level activity that may be pre-closing activity. Review and confirm the handling before posting.",
+    severity: "warning",
+    transformedValue: String(totals.endingBalance)
+  }));
+  period13CloseAnalysis.status = "review_required";
+}
+
+function buildPeriod13CloseAnalysis({
+  handling,
+  previewRows,
+  referenceData
+}: {
+  handling: Period13Handling | null;
+  previewRows: PreviewRowRecord[];
+  referenceData: Awaited<ReturnType<typeof loadReferenceData>>;
+}): Period13CloseAnalysis {
+  if (!handling) {
+    return {
+      funds: [],
+      handling,
+      status: "not_period_13"
+    };
+  }
+
+  const funds = new Map<string, Period13CloseFundAnalysis>();
+
+  for (const row of previewRows) {
+    const fundCode = row.fund_code?.trim();
+    if (!fundCode) {
+      continue;
+    }
+
+    const endingBalance = getNumericValue(row.ending_balance) ?? 0;
+    const objectCode = row.object_code?.trim() ?? "";
+    const objectReference = objectCode ? referenceData.objects.get(objectCode) : null;
+    const accountType = normalizeAccountType(objectReference?.accountType);
+    const accountCategory = classifyObjectAccountType(accountType);
+    const current = funds.get(fundCode) ?? {
+      activityAccountTotal: 0,
+      balanceSheetAccountTotal: 0,
+      classificationCompletenessStatus: "complete",
+      expenditureOrExpenseTotal: 0,
+      explainableByYearEndActivity: false,
+      fundCode,
+      fundName: referenceData.funds.get(fundCode)?.name ?? null,
+      otherFinancingSourceTotal: 0,
+      otherFinancingUseTotal: 0,
+      revenueTotal: 0,
+      rowCount: 0,
+      totalEndingBalance: 0,
+      transferTotal: 0,
+      unknownAccountTotal: 0
+    };
+
+    current.rowCount += 1;
+    current.totalEndingBalance += endingBalance;
+
+    if (accountCategory === "activity") {
+      current.activityAccountTotal += endingBalance;
+      addActivitySubtypeTotal({
+        accountType,
+        amount: endingBalance,
+        fundAnalysis: current
+      });
+    } else if (accountCategory === "balance_sheet") {
+      current.balanceSheetAccountTotal += endingBalance;
+    } else {
+      current.unknownAccountTotal += endingBalance;
+      current.classificationCompletenessStatus =
+        objectReference && objectReference.accountType
+          ? "unknown_account_type"
+          : "incomplete";
+    }
+
+    funds.set(fundCode, current);
+  }
+
+  const fundAnalyses = [...funds.values()].map((fund) => {
+    const explainableByYearEndActivity =
+      !amountsTie(fund.totalEndingBalance, 0) &&
+      amountsTie(fund.totalEndingBalance, fund.activityAccountTotal) &&
+      amountsTie(fund.balanceSheetAccountTotal, 0) &&
+      amountsTie(fund.unknownAccountTotal, 0) &&
+      fund.classificationCompletenessStatus === "complete";
+
+    return {
+      ...fund,
+      explainableByYearEndActivity
+    };
+  });
+
+  return {
+    funds: fundAnalyses,
+    handling,
+    status: "normal_balanced"
+  };
+}
+
+function addActivitySubtypeTotal({
+  accountType,
+  amount,
+  fundAnalysis
+}: {
+  accountType: string;
+  amount: number;
+  fundAnalysis: Period13CloseFundAnalysis;
+}) {
+  if (accountType === "revenue" || accountType === "revenues") {
+    fundAnalysis.revenueTotal += amount;
+    return;
+  }
+
+  if (
+    accountType === "expenditure" ||
+    accountType === "expenditures" ||
+    accountType === "expense" ||
+    accountType === "expenses"
+  ) {
+    fundAnalysis.expenditureOrExpenseTotal += amount;
+    return;
+  }
+
+  if (
+    accountType === "transfer_in" ||
+    accountType === "transfers_in" ||
+    accountType === "transfer_out" ||
+    accountType === "transfers_out"
+  ) {
+    fundAnalysis.transferTotal += amount;
+    return;
+  }
+
+  if (
+    accountType === "other_financing_source" ||
+    accountType === "other_financing_sources"
+  ) {
+    fundAnalysis.otherFinancingSourceTotal += amount;
+    return;
+  }
+
+  if (
+    accountType === "other_financing_use" ||
+    accountType === "other_financing_uses"
+  ) {
+    fundAnalysis.otherFinancingUseTotal += amount;
+  }
+}
+
+function isPeriod13FundImbalanceExplainable(fund: Period13CloseFundAnalysis) {
+  return fund.explainableByYearEndActivity;
+}
+
+function createPeriod13CloseException({
+  code,
+  message,
+  rawValue = "period_13",
+  severity,
+  transformedValue = null
+}: {
+  code: string;
+  message: string;
+  rawValue?: string | null;
+  severity: ValidationSeverity;
+  transformedValue?: string | null;
+}) {
+  return createException({
+    code,
+    message,
+    rawValue,
+    severity,
+    targetFieldName: "ending_balance",
+    transformedValue
+  });
+}
+
+function getPeriod13Handling(batch: ImportBatchRecord): Period13Handling | null {
+  if (batch.period !== 13) {
+    return null;
+  }
+
+  const handling = batch.metadata?.period_13_handling;
+  if (
+    handling === "post_closing" ||
+    handling === "pre_closing" ||
+    handling === "unsure"
+  ) {
+    return handling;
+  }
+
+  return "post_closing";
+}
+
+function classifyObjectAccountType(accountType: string) {
+  const activityAccountTypes = new Set([
+    "revenue",
+    "revenues",
+    "expenditure",
+    "expenditures",
+    "expense",
+    "expenses",
+    "other_financing_source",
+    "other_financing_sources",
+    "other_financing_use",
+    "other_financing_uses",
+    "transfer_in",
+    "transfers_in",
+    "transfer_out",
+    "transfers_out"
+  ]);
+  const balanceSheetAccountTypes = new Set([
+    "asset",
+    "assets",
+    "liability",
+    "liabilities",
+    "deferred_outflow",
+    "deferred_outflows",
+    "deferred_inflow",
+    "deferred_inflows",
+    "fund_balance",
+    "net_position"
+  ]);
+
+  if (activityAccountTypes.has(accountType)) {
+    return "activity";
+  }
+
+  if (balanceSheetAccountTypes.has(accountType)) {
+    return "balance_sheet";
+  }
+
+  return "unknown";
+}
+
+function normalizeAccountType(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase().replaceAll(" ", "_").replaceAll("-", "_");
 }
 
 function buildBalanceTotals(rows: PreviewRowRecord[]) {
@@ -1797,10 +2234,10 @@ async function loadReferenceTable({
 }) {
   const result = await adminClient
     .from(tableName)
-    .select(`${codeField}, mapping_version_id`)
+    .select("*")
     .eq("organization_id", organizationId)
     .eq("active_status", "active")
-    .returns<Array<Record<string, string | null>>>();
+    .returns<Array<Record<string, unknown>>>();
 
   if (result.error) {
     throw new Error(result.error.message);
@@ -1812,17 +2249,41 @@ async function loadReferenceTable({
         const code = row[codeField];
         return typeof code === "string"
           ? {
+              accountType:
+                typeof row.account_type === "string"
+                  ? row.account_type
+                  : null,
               code,
               mappingVersionId:
                 typeof row.mapping_version_id === "string"
                   ? row.mapping_version_id
-                  : null
+                  : null,
+              name: getReferenceName(row)
             }
           : null;
       })
       .filter((row): row is ReferenceRecord => Boolean(row))
       .map((row) => [row.code, row])
   );
+}
+
+function getReferenceName(row: Record<string, unknown>) {
+  const nameFields = [
+    "fund_name",
+    "object_name",
+    "acfr_name",
+    "department_name",
+    "function_name"
+  ];
+
+  for (const field of nameFields) {
+    const value = row[field];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+
+  return null;
 }
 
 function collectMappingVersions(

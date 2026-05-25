@@ -50,6 +50,7 @@ export function TrialBalanceUploadForm({
   const [selectedFiscalPeriodId, setSelectedFiscalPeriodId] = useState(
     defaultPeriod?.fiscalPeriodId ?? ""
   );
+  const [period13Handling, setPeriod13Handling] = useState("post_closing");
   const selectedPeriod = useMemo(
     () =>
       periods.find((period) => period.fiscalPeriodId === selectedFiscalPeriodId) ??
@@ -132,6 +133,33 @@ export function TrialBalanceUploadForm({
                 {selectedPeriod.importStatus === "in_progress"
                   ? " Another trial balance import already exists for this period. Review in-progress imports before continuing."
                   : null}
+              </div>
+            ) : null}
+
+            {selectedPeriod?.period === 13 ? (
+              <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                <label className="block space-y-2 font-medium" htmlFor="period13Handling">
+                  Period 13 trial balance type
+                  <select
+                    className="flex h-10 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    id="period13Handling"
+                    name="period13Handling"
+                    onChange={(event) => setPeriod13Handling(event.target.value)}
+                    required
+                    value={period13Handling}
+                  >
+                    <option value="post_closing">Post-closing trial balance</option>
+                    <option value="pre_closing">Pre-closing year-end trial balance</option>
+                    <option value="unsure">Unsure, require review</option>
+                  </select>
+                </label>
+                <p className="leading-6">
+                  {period13Handling === "pre_closing"
+                    ? "The file may include unclosed revenue, expenditure, expense, transfer, and other nominal account activity. Explainable fund-level activity will be flagged pending close verification."
+                    : period13Handling === "unsure"
+                      ? "The app will run Period 13 diagnostics and require review before posting if balance issues appear."
+                      : "The file should balance like a normal trial balance. Fund-level and batch-level imbalances are treated as critical errors."}
+                </p>
               </div>
             ) : null}
 

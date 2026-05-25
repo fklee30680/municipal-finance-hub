@@ -194,6 +194,7 @@ async function uploadSourceFileInternal(
   const importTypeId = getStringValue(formData.get("importTypeId"));
   const fiscalYearValue = getStringValue(formData.get("fiscalYear"));
   const periodValue = getStringValue(formData.get("period"));
+  const period13HandlingValue = getStringValue(formData.get("period13Handling"));
   const fiscalYearId = getStringValue(formData.get("fiscalYearId"));
   const fiscalPeriodId = getStringValue(formData.get("fiscalPeriodId"));
   const templateVersionId = getStringValue(formData.get("templateVersionId"));
@@ -260,6 +261,12 @@ async function uploadSourceFileInternal(
   if (period !== null && (period < 0 || period > 13)) {
     return errorState("Period must be between 0 and 13.");
   }
+
+  const period13Handling = getPeriod13Handling({
+    importTypeCode: importTypeResult.data.import_type_code,
+    period,
+    value: period13HandlingValue
+  });
 
   if (requiresPeriod) {
     const fiscalSetup = await loadFiscalSetupForUpload({
@@ -395,6 +402,11 @@ async function uploadSourceFileInternal(
       metadata: {
         raw_upload_only: true,
         default_template_applied: Boolean(selectedTemplate?.ok),
+        period_13_handling: period13Handling,
+        period_13_close_status:
+          period13Handling === "pre_closing" || period13Handling === "unsure"
+            ? "not_validated"
+            : null,
         selected_template_version_id: selectedTemplate?.ok
           ? selectedTemplate.templateVersionId
           : null,
@@ -632,6 +644,30 @@ function parseOptionalInteger(value: string) {
 
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? null : parsed;
+}
+
+function getPeriod13Handling({
+  importTypeCode,
+  period,
+  value
+}: {
+  importTypeCode: string;
+  period: number | null;
+  value: string;
+}) {
+  if (importTypeCode !== "trial_balance" || period !== 13) {
+    return null;
+  }
+
+  if (!value) {
+    return "post_closing";
+  }
+
+  if (["post_closing", "pre_closing", "unsure"].includes(value)) {
+    return value;
+  }
+
+  throw new Error("Period 13 handling is not valid.");
 }
 
 function errorState(message: string): UploadSourceFileState {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +35,19 @@ export function ImportUploadForm({
     action,
     initialUploadSourceFileState
   );
+  const defaultImportTypeId =
+    importTypes.find(
+      (importType) => importType.import_type_code === defaultImportTypeCode
+    )?.import_type_id ?? "";
+  const [selectedImportTypeId, setSelectedImportTypeId] = useState(defaultImportTypeId);
+  const [periodValue, setPeriodValue] = useState("");
+  const [period13Handling, setPeriod13Handling] = useState("post_closing");
+  const selectedImportType = importTypes.find(
+    (importType) => importType.import_type_id === selectedImportTypeId
+  );
+  const showPeriod13Handling =
+    selectedImportType?.import_type_code === "trial_balance" &&
+    periodValue.trim() === "13";
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
@@ -52,13 +65,9 @@ export function ImportUploadForm({
                 className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 id="importTypeId"
                 name="importTypeId"
+                onChange={(event) => setSelectedImportTypeId(event.target.value)}
                 required
-                defaultValue={
-                  importTypes.find(
-                    (importType) =>
-                      importType.import_type_code === defaultImportTypeCode
-                  )?.import_type_id ?? ""
-                }
+                value={selectedImportTypeId}
               >
                 <option value="">Select import type</option>
                 {importTypes.map((importType) => (
@@ -99,11 +108,40 @@ export function ImportUploadForm({
                   max={13}
                   min={0}
                   name="period"
+                  onChange={(event) => setPeriodValue(event.target.value)}
                   placeholder="1"
                   type="number"
+                  value={periodValue}
                 />
               </div>
             </div>
+
+            {showPeriod13Handling ? (
+              <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                <label className="block space-y-2 font-medium" htmlFor="period13Handling">
+                  Period 13 trial balance type
+                  <select
+                    className="flex h-10 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    id="period13Handling"
+                    name="period13Handling"
+                    onChange={(event) => setPeriod13Handling(event.target.value)}
+                    required
+                    value={period13Handling}
+                  >
+                    <option value="post_closing">Post-closing trial balance</option>
+                    <option value="pre_closing">Pre-closing year-end trial balance</option>
+                    <option value="unsure">Unsure, require review</option>
+                  </select>
+                </label>
+                <p className="leading-6">
+                  {period13Handling === "pre_closing"
+                    ? "Pre-closing Period 13 may include unclosed nominal activity and will be flagged pending close verification if explainable."
+                    : period13Handling === "unsure"
+                      ? "The app will run Period 13 diagnostics and require review if balance issues appear."
+                      : "Post-closing Period 13 must balance like a normal trial balance."}
+                </p>
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="file">

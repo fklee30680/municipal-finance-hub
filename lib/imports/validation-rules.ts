@@ -142,6 +142,24 @@ export const validationRuleCatalog: ValidationRuleDefinition[] = [
     suggestedFix: "Review debit, credit, and net change columns or confirm export sign convention."
   },
   {
+    category: "trial_balance_integrity",
+    code: "period_13_pending_close_verification",
+    defaultSeverity: "warning",
+    suggestedFix: "Verify that the annual close rolls this amount into fund balance or net position and confirm against next fiscal year Period 1 opening balances when available."
+  },
+  {
+    category: "trial_balance_integrity",
+    code: "period_13_review_required",
+    defaultSeverity: "warning",
+    suggestedFix: "Review Period 13 handling, confirm whether the file is pre-closing or post-closing, and rerun validation if needed."
+  },
+  {
+    category: "trial_balance_integrity",
+    code: "period_13_unexplained_imbalance",
+    defaultSeverity: "critical_error",
+    suggestedFix: "Review mappings, object classifications, signs, missing rows, or export completeness."
+  },
+  {
     category: "fiscal_period",
     code: "invalid_fiscal_year",
     defaultSeverity: "critical_error",

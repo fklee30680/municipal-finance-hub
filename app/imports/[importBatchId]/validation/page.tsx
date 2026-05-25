@@ -62,6 +62,7 @@ type ValidationRunRow = {
   rows_rejected: number;
   validated_at: string | null;
   created_at: string;
+  metadata: Record<string, unknown> | null;
 };
 
 type ValidationExceptionRow = {
@@ -175,7 +176,7 @@ export default async function TrialBalanceValidationPage({
   const latestValidationResult = await adminClient
     .from("validation_runs")
     .select(
-      "validation_run_id, preview_run_id, status, eligible_to_post, warnings_acknowledged, critical_error_count, warning_count, information_count, rows_detected, rows_validated, rows_rejected, validated_at, created_at"
+      "validation_run_id, preview_run_id, status, eligible_to_post, warnings_acknowledged, critical_error_count, warning_count, information_count, rows_detected, rows_validated, rows_rejected, validated_at, created_at, metadata"
     )
     .eq("organization_id", appUser.organization_id)
     .eq("import_batch_id", importBatchId)
@@ -468,6 +469,36 @@ export default async function TrialBalanceValidationPage({
                 />
               </CardContent>
             </Card>
+
+            {getPeriod13Handling(latestValidation.metadata) ? (
+              <Card className="border-amber-200 bg-amber-50/70">
+                <CardHeader>
+                  <CardTitle>Period 13 year-end handling</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <InfoItem
+                      label="Trial balance type"
+                      value={formatPeriod13Handling(getPeriod13Handling(latestValidation.metadata))}
+                    />
+                    <InfoItem
+                      label="Year-end validation status"
+                      value={formatPeriod13CloseStatus(getPeriod13CloseStatus(latestValidation.metadata))}
+                    />
+                    <InfoItem
+                      label="Posting impact"
+                      value={getPeriod13PostingImpact(latestValidation)}
+                    />
+                  </div>
+                  <p className="text-muted-foreground">
+                    Period 13 remains structurally validated. Pre-closing or unsure
+                    files can only proceed with explainable year-end activity, and
+                    warnings must be acknowledged before posting.
+                  </p>
+                  <Period13CloseAnalysisTable metadata={latestValidation.metadata} />
+                </CardContent>
+              </Card>
+            ) : null}
 
             <Card>
               <CardHeader>
@@ -821,6 +852,71 @@ function InfoItem({
   );
 }
 
+function Period13CloseAnalysisTable({
+  metadata
+}: {
+  metadata: Record<string, unknown> | null;
+}) {
+  const funds = getPeriod13CloseFunds(metadata);
+
+  if (funds.length === 0) {
+    return (
+      <p className="rounded-md border border-amber-200 bg-background px-3 py-2 text-sm text-muted-foreground">
+        No fund-level Period 13 close variance was recorded for this validation run.
+      </p>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-md border border-amber-200 bg-background">
+      <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+        <thead>
+          <tr className="border-b border-border text-muted-foreground">
+            <th className="px-3 py-2 font-medium">Fund</th>
+            <th className="px-3 py-2 font-medium">Ending net</th>
+            <th className="px-3 py-2 font-medium">Activity total</th>
+            <th className="px-3 py-2 font-medium">Balance sheet total</th>
+            <th className="px-3 py-2 font-medium">Classification</th>
+            <th className="px-3 py-2 font-medium">Close review</th>
+          </tr>
+        </thead>
+        <tbody>
+          {funds.slice(0, 10).map((fund) => (
+            <tr className="border-b border-border last:border-0" key={String(fund.fundCode)}>
+              <td className="px-3 py-2 text-foreground">
+                {String(fund.fundCode)}
+                {fund.fundName ? ` - ${String(fund.fundName)}` : ""}
+              </td>
+              <td className="px-3 py-2 text-muted-foreground">
+                {formatMoney(Number(fund.totalEndingBalance ?? 0))}
+              </td>
+              <td className="px-3 py-2 text-muted-foreground">
+                {formatMoney(Number(fund.activityAccountTotal ?? 0))}
+              </td>
+              <td className="px-3 py-2 text-muted-foreground">
+                {formatMoney(Number(fund.balanceSheetAccountTotal ?? 0))}
+              </td>
+              <td className="px-3 py-2 text-muted-foreground">
+                {String(fund.classificationCompletenessStatus ?? "Not available")}
+              </td>
+              <td className="px-3 py-2 text-muted-foreground">
+                {fund.explainableByYearEndActivity
+                  ? "Pending close verification"
+                  : "Requires correction or review"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {funds.length > 10 ? (
+        <p className="px-3 py-2 text-sm text-muted-foreground">
+          Showing 10 of {funds.length} Period 13 fund close variance rows.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function getRelatedRecord<T>(value: Related<T> | undefined) {
   if (Array.isArray(value)) {
     return value[0] ?? null;
@@ -954,7 +1050,10 @@ function getRootCauseGroup(exceptionCode: string, exceptionMessage = "") {
     exceptionCode === "batch_out_of_balance" ||
     exceptionCode === "fund_out_of_balance" ||
     exceptionCode === "batch_debits_credits_out_of_balance" ||
-    exceptionCode === "fund_debits_credits_out_of_balance"
+    exceptionCode === "fund_debits_credits_out_of_balance" ||
+    exceptionCode === "period_13_pending_close_verification" ||
+    exceptionCode === "period_13_review_required" ||
+    exceptionCode === "period_13_unexplained_imbalance"
   ) {
     return "trial_balance_integrity";
   }
@@ -1002,6 +1101,15 @@ function buildTrialBalanceIntegritySummary(
       description: "Each row's debits minus credits equals net change.",
       issueCount: countFor(["row_net_change_mismatch", "net_change_formula_failure"]),
       label: "Debit/credit/net formula"
+    },
+    {
+      description: "Period 13 pre-closing or unsure handling is reviewed separately from normal monthly balancing.",
+      issueCount: countFor([
+        "period_13_pending_close_verification",
+        "period_13_review_required",
+        "period_13_unexplained_imbalance"
+      ]),
+      label: "Period 13 close review"
     }
   ];
 
@@ -1104,4 +1212,76 @@ function formatDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function getPeriod13Handling(metadata: Record<string, unknown> | null) {
+  const value = metadata?.period_13_handling;
+  return typeof value === "string" ? value : null;
+}
+
+function getPeriod13CloseStatus(metadata: Record<string, unknown> | null) {
+  const value = metadata?.period_13_close_status;
+  return typeof value === "string" ? value : null;
+}
+
+function formatPeriod13Handling(value: string | null) {
+  const labels: Record<string, string> = {
+    post_closing: "Post-closing trial balance",
+    pre_closing: "Pre-closing year-end trial balance",
+    unsure: "Unsure, require review"
+  };
+
+  return value ? labels[value] ?? value : "Not selected";
+}
+
+function formatPeriod13CloseStatus(value: string | null) {
+  const labels: Record<string, string> = {
+    failed_unexplained: "Blocked - unexplained imbalance",
+    normal_balanced: "Balanced",
+    not_period_13: "Not Period 13",
+    pending_close_verification: "Pending close verification",
+    review_required: "Review required"
+  };
+
+  return value ? labels[value] ?? value : "Not evaluated";
+}
+
+function getPeriod13PostingImpact(validation: ValidationRunRow) {
+  const status = getPeriod13CloseStatus(validation.metadata);
+
+  if (validation.critical_error_count > 0) {
+    return "Blocked by critical validation errors";
+  }
+
+  if (status === "pending_close_verification" || status === "review_required") {
+    return validation.warnings_acknowledged
+      ? "Warnings acknowledged; posting can proceed if otherwise eligible"
+      : "Warning acknowledgement required before posting";
+  }
+
+  return validation.eligible_to_post ? "Eligible" : "Not eligible";
+}
+
+function getPeriod13CloseFunds(metadata: Record<string, unknown> | null) {
+  const analysis = metadata?.period_13_close_analysis;
+  if (!analysis || typeof analysis !== "object" || Array.isArray(analysis)) {
+    return [];
+  }
+
+  const funds = (analysis as { funds?: unknown }).funds;
+  return Array.isArray(funds)
+    ? funds.filter(
+        (fund): fund is Record<string, unknown> =>
+          Boolean(fund) && typeof fund === "object" && !Array.isArray(fund)
+      )
+    : [];
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "currency"
+  }).format(value);
 }

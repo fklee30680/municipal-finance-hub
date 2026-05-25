@@ -47,6 +47,7 @@ type ValidationRunRecord = {
   information_count: number;
   rows_validated: number;
   rows_rejected: number;
+  metadata: Record<string, unknown> | null;
 };
 
 type PreviewRowRecord = {
@@ -251,6 +252,9 @@ export async function postValidatedTrialBalance({
     posted_by: userId,
     created_at: now,
     metadata: {
+      period_13_close_analysis: validationRun.metadata?.period_13_close_analysis ?? null,
+      period_13_close_status: validationRun.metadata?.period_13_close_status ?? null,
+      period_13_handling: validationRun.metadata?.period_13_handling ?? null,
       replacement_request_id: replacementRequestId ?? null
     }
   });
@@ -329,6 +333,9 @@ export async function postValidatedTrialBalance({
         metadata: {
           ...(batch.metadata ?? {}),
           latest_posting_run_id: postingRunId,
+          period_13_close_analysis: validationRun.metadata?.period_13_close_analysis ?? null,
+          period_13_close_status: getPostedPeriod13CloseStatus(validationRun.metadata),
+          period_13_handling: validationRun.metadata?.period_13_handling ?? null,
           posting_mode: postingMode,
           validation_run_id: validationRun.validation_run_id
         }
@@ -1147,7 +1154,7 @@ async function loadLatestValidationRun({
   const result = await adminClient
     .from("validation_runs")
     .select(
-      "validation_run_id, import_batch_id, source_file_id, import_template_version_id, account_structure_id, preview_run_id, status, eligible_to_post, warnings_acknowledged, critical_error_count, warning_count, information_count, rows_validated, rows_rejected"
+      "validation_run_id, import_batch_id, source_file_id, import_template_version_id, account_structure_id, preview_run_id, status, eligible_to_post, warnings_acknowledged, critical_error_count, warning_count, information_count, rows_validated, rows_rejected, metadata"
     )
     .eq("organization_id", organizationId)
     .eq("import_batch_id", importBatchId)
@@ -1377,6 +1384,15 @@ function chunkArray<T>(items: T[], chunkSize: number) {
     chunks.push(items.slice(index, index + chunkSize));
   }
   return chunks;
+}
+
+function getPostedPeriod13CloseStatus(metadata: Record<string, unknown> | null) {
+  const status = metadata?.period_13_close_status;
+  if (status === "pending_close_verification" || status === "review_required") {
+    return "posted_pending_close_verification";
+  }
+
+  return typeof status === "string" ? status : null;
 }
 
 async function writeAuditLog({

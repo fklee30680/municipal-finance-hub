@@ -57,6 +57,7 @@ type ValidationRunRow = {
   rows_rejected: number;
   validated_at: string | null;
   created_at: string;
+  metadata: Record<string, unknown> | null;
 };
 
 type PostingRunRow = {
@@ -134,7 +135,7 @@ export default async function PostTrialBalancePage({
       adminClient
         .from("validation_runs")
         .select(
-          "validation_run_id, status, eligible_to_post, warnings_acknowledged, critical_error_count, warning_count, information_count, rows_validated, rows_rejected, validated_at, created_at"
+          "validation_run_id, status, eligible_to_post, warnings_acknowledged, critical_error_count, warning_count, information_count, rows_validated, rows_rejected, validated_at, created_at, metadata"
         )
         .eq("organization_id", appUser.organization_id)
         .eq("import_batch_id", importBatchId)
@@ -369,6 +370,37 @@ export default async function PostTrialBalancePage({
           </Card>
         ) : null}
 
+        {latestValidation && getPeriod13Handling(latestValidation.metadata) ? (
+          <Card className="border-amber-200 bg-amber-50/70">
+            <CardHeader>
+              <CardTitle>Period 13 close verification</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <div className="grid gap-4 md:grid-cols-3">
+                <InfoItem
+                  label="Trial balance type"
+                  value={formatPeriod13Handling(getPeriod13Handling(latestValidation.metadata))}
+                />
+                <InfoItem
+                  label="Year-end status"
+                  value={formatPeriod13CloseStatus(getPeriod13CloseStatus(latestValidation.metadata))}
+                />
+                <InfoItem
+                  label="Warnings acknowledged"
+                  value={latestValidation.warnings_acknowledged ? "Yes" : "No"}
+                />
+              </div>
+              <p className="text-muted-foreground">
+                Period 13 pre-closing or unsure imports may post only after
+                structural validation passes and any pending close-verification
+                warnings are acknowledged. Close verification remains pending
+                until it is compared with the next fiscal year opening period.
+              </p>
+              <Period13CloseAnalysisList metadata={latestValidation.metadata} />
+            </CardContent>
+          </Card>
+        ) : null}
+
         {!activeConflict ? (
           <Card>
             <CardHeader>
@@ -504,6 +536,46 @@ function InfoItem({
   );
 }
 
+function Period13CloseAnalysisList({
+  metadata
+}: {
+  metadata: Record<string, unknown> | null;
+}) {
+  const funds = getPeriod13CloseFunds(metadata).filter(
+    (fund) => Math.abs(Number(fund.totalEndingBalance ?? 0)) > 0.01
+  );
+
+  if (funds.length === 0) {
+    return (
+      <p className="rounded-md border border-amber-200 bg-background px-3 py-2 text-muted-foreground">
+        No out-of-balance Period 13 fund close variance was recorded.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {funds.slice(0, 5).map((fund) => (
+        <p
+          className="rounded-md border border-amber-200 bg-background px-3 py-2 text-muted-foreground"
+          key={String(fund.fundCode)}
+        >
+          Fund {String(fund.fundCode)}
+          {fund.fundName ? ` - ${String(fund.fundName)}` : ""}: ending net{" "}
+          {formatMoney(Number(fund.totalEndingBalance ?? 0))}; activity total{" "}
+          {formatMoney(Number(fund.activityAccountTotal ?? 0))}.
+        </p>
+      ))}
+      {funds.length > 5 ? (
+        <p className="text-muted-foreground">
+          Showing 5 of {funds.length} Period 13 close-variance funds. Review
+          validation for the full list.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ChecklistItem({
   children,
   complete
@@ -555,4 +627,60 @@ function formatDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function getPeriod13Handling(metadata: Record<string, unknown> | null) {
+  const value = metadata?.period_13_handling;
+  return typeof value === "string" ? value : null;
+}
+
+function getPeriod13CloseStatus(metadata: Record<string, unknown> | null) {
+  const value = metadata?.period_13_close_status;
+  return typeof value === "string" ? value : null;
+}
+
+function formatPeriod13Handling(value: string | null) {
+  const labels: Record<string, string> = {
+    post_closing: "Post-closing trial balance",
+    pre_closing: "Pre-closing year-end trial balance",
+    unsure: "Unsure, require review"
+  };
+
+  return value ? labels[value] ?? value : "Not selected";
+}
+
+function formatPeriod13CloseStatus(value: string | null) {
+  const labels: Record<string, string> = {
+    failed_unexplained: "Blocked - unexplained imbalance",
+    normal_balanced: "Balanced",
+    not_period_13: "Not Period 13",
+    pending_close_verification: "Pending close verification",
+    review_required: "Review required"
+  };
+
+  return value ? labels[value] ?? value : "Not evaluated";
+}
+
+function getPeriod13CloseFunds(metadata: Record<string, unknown> | null) {
+  const analysis = metadata?.period_13_close_analysis;
+  if (!analysis || typeof analysis !== "object" || Array.isArray(analysis)) {
+    return [];
+  }
+
+  const funds = (analysis as { funds?: unknown }).funds;
+  return Array.isArray(funds)
+    ? funds.filter(
+        (fund): fund is Record<string, unknown> =>
+          Boolean(fund) && typeof fund === "object" && !Array.isArray(fund)
+      )
+    : [];
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "currency"
+  }).format(value);
 }

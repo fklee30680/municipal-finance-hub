@@ -72,6 +72,20 @@ export function CalculationRunForm({
             <option value="selected_range">Selected range</option>
           </select>
         </label>
+        <label className="space-y-2 text-sm font-medium text-foreground">
+          Reporting scope
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            defaultValue="standard"
+            name="reportingScope"
+          >
+            <option value="standard">Standard Reporting</option>
+            <option value="cash_reconciliation">
+              Include Pooled Cash / Reconciliation
+            </option>
+            <option value="all_active">All Active Funds</option>
+          </select>
+        </label>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button disabled={pending || Boolean(disabledReason)} type="submit">

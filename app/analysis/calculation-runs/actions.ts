@@ -24,10 +24,15 @@ export async function runCalculationAction(
     const fiscalYear = getInteger(formData.get("fiscalYear"));
     const periodFrom = getInteger(formData.get("periodFrom"));
     const periodTo = getInteger(formData.get("periodTo"));
+    const reportingScope = getString(formData.get("reportingScope")) || "standard";
     const timeView = getString(formData.get("timeView"));
 
     if (!["current_period", "ytd", "selected_range"].includes(timeView)) {
       return errorState("Choose a valid time view.");
+    }
+
+    if (!["standard", "cash_reconciliation", "all_active"].includes(reportingScope)) {
+      return errorState("Choose a valid reporting scope.");
     }
 
     const result = await runAnalysisCalculation({
@@ -37,12 +42,21 @@ export async function runCalculationAction(
         organizationId: appUser.organization_id,
         periodFrom,
         periodTo,
+        reportingScope: reportingScope as
+          | "all_active"
+          | "cash_reconciliation"
+          | "standard",
         timeView: timeView as "current_period" | "ytd" | "selected_range",
         userId: appUser.user_id
       }
     });
 
     revalidatePath("/analysis/calculation-runs");
+    revalidatePath("/analysis");
+    revalidatePath("/analysis/financial-statements");
+    revalidatePath("/analysis/funds");
+    revalidatePath("/analysis/variances");
+    revalidatePath("/analysis/exceptions");
 
     return {
       calculationRunId: result.calculationRunId,

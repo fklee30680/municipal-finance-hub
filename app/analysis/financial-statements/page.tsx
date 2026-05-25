@@ -1,7 +1,7 @@
 import { GovernedDashboardPage } from "@/components/governed-dashboard-page";
 import type { DashboardSearchParams } from "@/lib/dashboards/governed-dashboard";
 
-export default async function AnalysisPage({
+export default async function FinancialStatementsDashboardPage({
   searchParams
 }: {
   searchParams: Promise<DashboardSearchParams>;
@@ -9,7 +9,7 @@ export default async function AnalysisPage({
   return (
     <GovernedDashboardPage
       searchParams={await searchParams}
-      view="cfo_overview"
+      view="financial_statements"
     />
   );
 }

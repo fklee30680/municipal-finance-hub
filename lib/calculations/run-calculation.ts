@@ -18,12 +18,14 @@ import {
 const BALANCE_TOLERANCE = 0.01;
 
 type TimeView = "current_period" | "ytd" | "selected_range";
+type ReportingScope = "standard" | "cash_reconciliation" | "all_active";
 
 export type RunCalculationRequest = {
   fiscalYear: number;
   organizationId: string;
   periodFrom: number;
   periodTo: number;
+  reportingScope?: ReportingScope;
   timeView: TimeView;
   userId: string;
 };
@@ -152,15 +154,17 @@ export async function runAnalysisCalculation({
       adminClient,
       organizationId: request.organizationId
     });
-    const standardCurrentLines = filterStandardReportingLines({
+    const scopedCurrentLines = filterReportingScopeLines({
       lines: currentLines,
+      reportingScope: request.reportingScope ?? "standard",
       references
     });
-    const standardComparison = filterComparisonForStandardReporting({
+    const scopedComparison = filterComparisonForReportingScope({
       comparison,
+      reportingScope: request.reportingScope ?? "standard",
       references
     });
-    const enrichedLines = enrichLines(standardCurrentLines, references);
+    const enrichedLines = enrichLines(scopedCurrentLines, references);
     const dependencyManifest = buildDependencyManifest({
       comparison,
       currentLines,
@@ -174,7 +178,7 @@ export async function runAnalysisCalculation({
     });
     const results = buildResults({
       calculationRunId,
-      comparison: standardComparison,
+      comparison: scopedComparison,
       coverageIssues,
       enrichedLines,
       request,
@@ -572,25 +576,58 @@ function filterStandardReportingLines({
   });
 }
 
-function filterComparisonForStandardReporting({
+function filterReportingScopeLines({
+  lines,
+  references,
+  reportingScope
+}: {
+  lines: ActiveTrialBalanceLine[];
+  references: Awaited<ReturnType<typeof loadReferenceRows>>;
+  reportingScope: ReportingScope;
+}) {
+  if (reportingScope === "standard") {
+    return filterStandardReportingLines({ lines, references });
+  }
+
+  return lines.filter((line) => {
+    const fund = references.funds.get(text(line.fund_code));
+    if (!fund || text(fund.active_status) === "inactive") return false;
+
+    if (reportingScope === "all_active") return true;
+
+    const treatment = text(fund.reporting_treatment);
+    return (
+      booleanValue(fund.include_in_standard_reporting, true) ||
+      booleanValue(fund.include_in_cash_reconciliation, false) ||
+      treatment === "pooled_cash" ||
+      treatment === "reconciliation_only"
+    );
+  });
+}
+
+function filterComparisonForReportingScope({
   comparison,
+  reportingScope,
   references
 }: {
   comparison: Awaited<ReturnType<typeof loadComparisonLines>>;
+  reportingScope: ReportingScope;
   references: Awaited<ReturnType<typeof loadReferenceRows>>;
 }) {
   return {
     priorPeriod: {
       ...comparison.priorPeriod,
-      lines: filterStandardReportingLines({
+      lines: filterReportingScopeLines({
         lines: comparison.priorPeriod.lines,
+        reportingScope,
         references
       })
     },
     priorYear: {
       ...comparison.priorYear,
-      lines: filterStandardReportingLines({
+      lines: filterReportingScopeLines({
         lines: comparison.priorYear.lines,
+        reportingScope,
         references
       })
     }
@@ -1729,7 +1766,39 @@ async function markComparableRunsSuperseded({
   calculationRunId: string;
   request: RunCalculationRequest;
 }) {
-  const result = await adminClient
+  const comparableResult = await adminClient
+    .from("calculation_runs")
+    .select("calculation_run_id, parameters_snapshot, parameters")
+    .eq("organization_id", request.organizationId)
+    .eq("fiscal_year", request.fiscalYear)
+    .eq("period_from", request.periodFrom)
+    .eq("period_to", request.periodTo)
+    .eq("time_view", request.timeView)
+    .neq("calculation_run_id", calculationRunId)
+    .eq("is_current", true)
+    .in("run_status", ["completed", "completed_with_warnings", "stale"])
+    .returns<
+      Array<{
+        calculation_run_id: string;
+        parameters: Record<string, unknown> | null;
+        parameters_snapshot: Record<string, unknown> | null;
+      }>
+    >();
+
+  if (comparableResult.error) {
+    throw new Error(comparableResult.error.message);
+  }
+
+  const reportingScope = request.reportingScope ?? "standard";
+  const comparableIds = (comparableResult.data ?? [])
+    .filter((run) => getRunReportingScope(run) === reportingScope)
+    .map((run) => run.calculation_run_id);
+
+  if (comparableIds.length === 0) {
+    return;
+  }
+
+  const updateResult = await adminClient
     .from("calculation_runs")
     .update({
       is_current: false,
@@ -1738,16 +1807,10 @@ async function markComparableRunsSuperseded({
       superseded_by_calculation_run_id: calculationRunId
     })
     .eq("organization_id", request.organizationId)
-    .eq("fiscal_year", request.fiscalYear)
-    .eq("period_from", request.periodFrom)
-    .eq("period_to", request.periodTo)
-    .eq("time_view", request.timeView)
-    .neq("calculation_run_id", calculationRunId)
-    .eq("is_current", true)
-    .in("run_status", ["completed", "completed_with_warnings", "stale"]);
+    .in("calculation_run_id", comparableIds);
 
-  if (result.error) {
-    throw new Error(result.error.message);
+  if (updateResult.error) {
+    throw new Error(updateResult.error.message);
   }
 }
 
@@ -1814,8 +1877,20 @@ function buildParametersSnapshot(request: RunCalculationRequest) {
     fiscal_year: request.fiscalYear,
     period_from: request.periodFrom,
     period_to: request.periodTo,
+    reporting_scope: request.reportingScope ?? "standard",
     time_view: request.timeView
   };
+}
+
+function getRunReportingScope(run: {
+  parameters: Record<string, unknown> | null;
+  parameters_snapshot: Record<string, unknown> | null;
+}) {
+  return (
+    text(run.parameters_snapshot?.reporting_scope) ||
+    text(run.parameters?.reporting_scope) ||
+    "standard"
+  );
 }
 
 function getMappingCoverageStatus(issues: CoverageIssue[]) {

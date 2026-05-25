@@ -1,15 +1,12 @@
 import { GovernedDashboardPage } from "@/components/governed-dashboard-page";
 import type { DashboardSearchParams } from "@/lib/dashboards/governed-dashboard";
 
-export default async function AnalysisPage({
+export default async function ExceptionsDashboardPage({
   searchParams
 }: {
   searchParams: Promise<DashboardSearchParams>;
 }) {
   return (
-    <GovernedDashboardPage
-      searchParams={await searchParams}
-      view="cfo_overview"
-    />
+    <GovernedDashboardPage searchParams={await searchParams} view="exceptions" />
   );
 }

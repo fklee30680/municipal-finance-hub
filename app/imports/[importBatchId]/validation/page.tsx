@@ -301,6 +301,8 @@ export default async function TrialBalanceValidationPage({
   const exceptions = exceptionsResult.data ?? [];
   const exceptionSummaryRows = exceptionSummaryResult?.data ?? [];
   const rootCauseSummaries = buildRootCauseSummaries(exceptionSummaryRows);
+  const trialBalanceIntegritySummary =
+    buildTrialBalanceIntegritySummary(exceptionSummaryRows);
   const mappingVersionLinks = mappingVersionsResult?.data ?? [];
   const acknowledgements = acknowledgementsResult?.data ?? [];
   const warningAcknowledgementAllowed = Boolean(
@@ -464,6 +466,43 @@ export default async function TrialBalanceValidationPage({
                       : "No active-data conflict detected"
                   }
                 />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Trial Balance Integrity</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {trialBalanceIntegritySummary.checks.map((check) => (
+                    <div
+                      className="rounded-md border border-border bg-card p-4"
+                      key={check.label}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-foreground">{check.label}</p>
+                          <p className="mt-1 text-muted-foreground">{check.description}</p>
+                        </div>
+                        <span
+                          className={
+                            check.issueCount > 0
+                              ? "rounded-md bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive"
+                              : "rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+                          }
+                        >
+                          {check.issueCount > 0 ? `${check.issueCount} issue${check.issueCount === 1 ? "" : "s"}` : "Passed"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {trialBalanceIntegritySummary.issueCount > 0
+                    ? "Review the Trial Balance Integrity items in the root-cause summary and exception detail before posting."
+                    : "The latest validation run found no batch, fund, or row-level trial balance integrity issues."}
+                </p>
               </CardContent>
             </Card>
 
@@ -917,6 +956,51 @@ function getRootCauseGroup(exceptionCode: string, exceptionMessage = "") {
   }
 
   return "other";
+}
+
+function buildTrialBalanceIntegritySummary(
+  exceptionSummaryRows: ValidationExceptionSummaryRow[]
+) {
+  const countFor = (codes: string[]) =>
+    exceptionSummaryRows.filter((row) => codes.includes(row.exception_code)).length;
+
+  const checks = [
+    {
+      description: "The total ending balance across all preview rows nets to zero within tolerance.",
+      issueCount: countFor(["batch_out_of_balance"]),
+      label: "Batch ending balance"
+    },
+    {
+      description: "Each fund's ending balances net to zero within tolerance.",
+      issueCount: countFor(["fund_out_of_balance"]),
+      label: "Fund ending balances"
+    },
+    {
+      description: "Total debits equal total credits using the MVP trial balance convention.",
+      issueCount: countFor(["batch_debits_credits_out_of_balance"]),
+      label: "Batch debits and credits"
+    },
+    {
+      description: "Each fund's debits equal credits using the MVP trial balance convention.",
+      issueCount: countFor(["fund_debits_credits_out_of_balance"]),
+      label: "Fund debits and credits"
+    },
+    {
+      description: "Each row's beginning balance plus net change equals ending balance.",
+      issueCount: countFor(["row_formula_mismatch", "balance_formula_failure"]),
+      label: "Beginning/net/ending formula"
+    },
+    {
+      description: "Each row's debits minus credits equals net change.",
+      issueCount: countFor(["row_net_change_mismatch", "net_change_formula_failure"]),
+      label: "Debit/credit/net formula"
+    }
+  ];
+
+  return {
+    checks,
+    issueCount: checks.reduce((total, check) => total + check.issueCount, 0)
+  };
 }
 
 function getRootCauseLabel(exceptionCode: string, exceptionMessage = "") {

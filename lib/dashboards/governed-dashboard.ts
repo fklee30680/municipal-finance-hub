@@ -229,6 +229,7 @@ export type DashboardOptions = {
 };
 
 export type DashboardOutput = {
+  dashboardFactCounts: DashboardFactCounts;
   dashboardFacts: DashboardFinancialFactRow[];
   exceptions: ExceptionRow[];
   filterNotes: string[];
@@ -237,6 +238,12 @@ export type DashboardOutput = {
   statementSummaries: StatementSummaryRow[];
   trends: TrendRow[];
   variances: VarianceRow[];
+};
+
+export type DashboardFactCounts = {
+  bySummaryType: Record<string, number>;
+  filteredTotal: number;
+  rawTotal: number;
 };
 
 export async function loadDashboardModel({
@@ -461,13 +468,11 @@ async function loadDashboardOutput({
     exceptions,
     mappingCoverage
   ] = await Promise.all([
-    adminClient
-      .from("dashboard_financial_facts")
-      .select("dashboard_financial_fact_id, summary_type, summary_key, summary_label, beginning_balance, debits, credits, net_change, ending_balance, presentation_amount, row_count, fund_code, fund_group, acfr_code, department_code, function_code, object_code, account_type, balance_sheet_line, activity_statement_line, reporting_model, result_payload")
-      .eq("organization_id", organizationId)
-      .eq("calculation_run_id", calculationRunId)
-      .limit(5000)
-      .returns<DashboardFinancialFactRow[]>(),
+    loadDashboardFacts({
+      adminClient,
+      calculationRunId,
+      organizationId
+    }),
     adminClient
       .from("financial_summary_results")
       .select("financial_summary_result_id, summary_type, summary_scope, summary_key, amount_type, amount_value, presentation_amount, beginning_balance, ending_balance, net_change, fund_code, acfr_code, department_code, function_code, object_code, account_type, balance_sheet_line, activity_statement_line, reporting_model, result_payload")
@@ -515,14 +520,12 @@ async function loadDashboardOutput({
       .returns<MappingCoverageRow[]>()
   ]);
 
-  if (dashboardFacts.error) {
-    throw new Error(
-      `Dashboard financial facts could not be loaded. Apply the dashboard_financial_facts migration before testing dashboard filters. ${dashboardFacts.error.message}`
-    );
-  }
-
-  const facts = dashboardFacts.data ?? [];
+  const facts = dashboardFacts;
   const rawOutput: DashboardOutput = {
+    dashboardFactCounts: buildDashboardFactCounts({
+      filteredFacts: facts,
+      rawFacts: facts
+    }),
     dashboardFacts: facts,
     exceptions: exceptions.data ?? [],
     filterNotes: [],
@@ -545,6 +548,10 @@ async function loadDashboardOutput({
 
     return {
       ...filteredOutput,
+      dashboardFactCounts: buildDashboardFactCounts({
+        filteredFacts,
+        rawFacts: facts
+      }),
       dashboardFacts: filteredFacts,
       filterNotes: uniqueText([
         ...filteredOutput.filterNotes.filter(
@@ -565,6 +572,10 @@ async function loadDashboardOutput({
   const legacyOutput = applyDashboardSelectionFilters(
     {
       dashboardFacts: [],
+      dashboardFactCounts: buildDashboardFactCounts({
+        filteredFacts: [],
+        rawFacts: []
+      }),
       exceptions: exceptions.data ?? [],
       filterNotes: [
         "This calculation run does not include dashboard financial facts. Rerun calculation after applying the dashboard-ready output migration to make dashboard filters fully effective."
@@ -597,6 +608,61 @@ function filterDashboardFacts(
       if (selection.accountType && fact.account_type !== selection.accountType) return false;
       return true;
     });
+}
+
+async function loadDashboardFacts({
+  adminClient,
+  calculationRunId,
+  organizationId
+}: {
+  adminClient: SupabaseClient;
+  calculationRunId: string;
+  organizationId: string;
+}) {
+  const pageSize = 1000;
+  const rows: DashboardFinancialFactRow[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    const result = await adminClient
+      .from("dashboard_financial_facts")
+      .select("dashboard_financial_fact_id, summary_type, summary_key, summary_label, beginning_balance, debits, credits, net_change, ending_balance, presentation_amount, row_count, fund_code, fund_group, acfr_code, department_code, function_code, object_code, account_type, balance_sheet_line, activity_statement_line, reporting_model, result_payload")
+      .eq("organization_id", organizationId)
+      .eq("calculation_run_id", calculationRunId)
+      .order("summary_type", { ascending: true })
+      .order("summary_key", { ascending: true })
+      .range(from, to)
+      .returns<DashboardFinancialFactRow[]>();
+
+    if (result.error) {
+      throw new Error(
+        `Dashboard financial facts could not be loaded. Apply the dashboard_financial_facts migration before testing dashboard filters. ${result.error.message}`
+      );
+    }
+
+    rows.push(...(result.data ?? []));
+
+    if ((result.data ?? []).length < pageSize) {
+      return rows;
+    }
+  }
+}
+
+function buildDashboardFactCounts({
+  filteredFacts,
+  rawFacts
+}: {
+  filteredFacts: DashboardFinancialFactRow[];
+  rawFacts: DashboardFinancialFactRow[];
+}): DashboardFactCounts {
+  return {
+    bySummaryType: rawFacts.reduce<Record<string, number>>((counts, fact) => {
+      counts[fact.summary_type] = (counts[fact.summary_type] ?? 0) + 1;
+      return counts;
+    }, {}),
+    filteredTotal: filteredFacts.length,
+    rawTotal: rawFacts.length
+  };
 }
 
 function buildFinancialSummariesFromFacts({
@@ -788,6 +854,10 @@ function sumAmounts<T extends Record<string, unknown>>(rows: T[], field: keyof T
 
 function emptyOutput(): DashboardOutput {
   return {
+    dashboardFactCounts: buildDashboardFactCounts({
+      filteredFacts: [],
+      rawFacts: []
+    }),
     dashboardFacts: [],
     exceptions: [],
     filterNotes: [],
@@ -842,6 +912,7 @@ function applyDashboardSelectionFilters(
   );
 
   return {
+    dashboardFactCounts: output.dashboardFactCounts,
     dashboardFacts: output.dashboardFacts,
     exceptions,
     filterNotes: uniqueText(filterNotes),

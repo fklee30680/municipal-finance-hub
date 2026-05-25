@@ -210,6 +210,7 @@ export function DataReadinessBanner({
   const warningCount =
     output.exceptions.filter((row) => row.severity_level === "Warning").length +
     output.mappingCoverage.filter((row) => row.severity === "Warning").length;
+  const factCounts = output.dashboardFactCounts;
 
   return (
     <div className="space-y-4">
@@ -247,6 +248,14 @@ export function DataReadinessBanner({
             label="Posting runs"
             value={calculationRun?.posting_run_ids?.length ?? 0}
           />
+          <Info label="Dashboard facts" value={`${factCounts.filteredTotal} / ${factCounts.rawTotal}`} />
+          <Info label="All facts" value={factCounts.bySummaryType.all ?? 0} />
+          <Info label="Fund facts" value={factCounts.bySummaryType.fund ?? 0} />
+          <Info label="Department facts" value={factCounts.bySummaryType.department ?? 0} />
+          <Info label="Function facts" value={factCounts.bySummaryType.function ?? 0} />
+          <Info label="ACFR facts" value={factCounts.bySummaryType.acfr ?? 0} />
+          <Info label="Account type facts" value={factCounts.bySummaryType.account_type ?? 0} />
+          <Info label="Detail facts" value={factCounts.bySummaryType.dashboard_detail ?? 0} />
         </div>
         <div className="rounded-md border border-border bg-card px-3 py-2 text-sm">
           <span className="font-medium text-foreground">Active filters: </span>
@@ -327,7 +336,7 @@ export function ExecutiveFinancialPositionView({
   const helper = hasDisplayFilter ? "Selected dashboard filters" : "Governed dashboard facts";
 
   if (facts.length === 0) {
-    return <DashboardFactsEmptyState hasDisplayFilter={hasDisplayFilter} />;
+    return <DashboardFactsEmptyState hasDisplayFilter={hasDisplayFilter} output={output} />;
   }
 
   return (
@@ -430,7 +439,7 @@ export function FundsView({ output }: { output: DashboardOutput }) {
   const rows = buildFundPerformanceRows(output);
 
   if (output.dashboardFacts.length === 0) {
-    return <DashboardFactsEmptyState hasDisplayFilter={false} />;
+    return <DashboardFactsEmptyState hasDisplayFilter={false} output={output} />;
   }
 
   return (
@@ -601,12 +610,28 @@ export function TraceabilityCard({ calculationRun }: { calculationRun: Calculati
   );
 }
 
-function DashboardFactsEmptyState({ hasDisplayFilter }: { hasDisplayFilter: boolean }) {
+function DashboardFactsEmptyState({
+  hasDisplayFilter,
+  output
+}: {
+  hasDisplayFilter: boolean;
+  output: DashboardOutput;
+}) {
+  const rawFactCount = output.dashboardFactCounts.rawTotal;
+  const filteredFactCount = output.dashboardFactCounts.filteredTotal;
+  let message =
+    "This calculation run does not have dashboard-ready facts. Apply the dashboard facts migration if needed, then rerun calculation for this dashboard selection.";
+
+  if (rawFactCount > 0 && filteredFactCount === 0 && hasDisplayFilter) {
+    message = "No governed dashboard facts match the selected filters.";
+  } else if (rawFactCount > 0 && filteredFactCount === 0) {
+    message =
+      "Dashboard facts exist, but this section does not have the required summary grain for the selected view.";
+  }
+
   return (
     <div className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
-      {hasDisplayFilter
-        ? "No governed facts match the selected filters."
-        : "This calculation run does not have dashboard-ready facts. Apply the dashboard facts migration if needed, then rerun calculation for this dashboard selection."}
+      {message}
     </div>
   );
 }

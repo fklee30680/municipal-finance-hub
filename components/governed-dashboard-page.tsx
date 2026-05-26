@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { DashboardContainer } from "@/components/dashboard-container";
+import { DepartmentFunctionHierarchyView } from "@/components/department-function-dashboard-view";
 import {
   DashboardFilterBar,
   DashboardFilterNotes,
@@ -220,13 +221,21 @@ export async function GovernedDashboardPage({
 
         <DashboardContainer
           description="Shows operating-area performance by department and function."
-          summary="Department and function results, operating-area changes, object/account drivers, and related exceptions."
+          summary="Department, fund, and function revenues and expenses."
           title="Department / Function View"
         >
-          <Placeholder>
-            This section will show department and function results, operating-area
-            changes, object/account drivers, and related exceptions.
-          </Placeholder>
+          {model.calculationRun ? (
+            <DepartmentFunctionHierarchyView
+              key={getDepartmentFunctionViewKey(model.selection)}
+              options={model.options}
+              output={model.output}
+              selection={model.selection}
+            />
+          ) : (
+            <Placeholder>
+              Department / Function data is available after a governed calculation run exists.
+            </Placeholder>
+          )}
         </DashboardContainer>
 
         <DashboardContainer
@@ -259,6 +268,17 @@ function Placeholder({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+function getDepartmentFunctionViewKey(selection: DashboardSelection) {
+  return [
+    selection.fund,
+    selection.fundGroup,
+    selection.department,
+    selection.functionCode,
+    selection.acfr,
+    selection.accountType
+  ].join("|");
 }
 
 function getIssueCounts(output: DashboardOutput) {

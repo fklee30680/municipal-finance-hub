@@ -467,7 +467,6 @@ export function FundsView({
             ["TB Ending Net", (row) => formatAmount(row.trialBalanceEndingNet)],
             ["Exceptions", (row) => (
               <FundExceptionsDialog
-                exceptionCount={row.exceptionCount}
                 exceptions={row.exceptions}
                 fund={row.fund}
               />

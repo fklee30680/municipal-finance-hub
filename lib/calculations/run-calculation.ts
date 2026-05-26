@@ -1769,8 +1769,8 @@ function buildVarianceExceptions({
         period: request.periodTo,
         recommendedAction: "Review the underlying posted trial balance activity and object classification.",
         request,
-        segmentCode: String(variance.object_code ?? ""),
-        segmentType: "object",
+        segmentCode: String(variance.variance_key ?? variance.object_code ?? ""),
+        segmentType: String(variance.variance_scope ?? "variance"),
         severity: variance.severity as "Warning" | "High",
         type:
           Math.abs(Number(variance.variance_percent ?? 0)) > 0
@@ -1954,6 +1954,16 @@ function buildTrialBalanceIntegrityExceptions({
           recommendedAction:
             "Review beginning balance, net change, and ending balance in the posted source row.",
           request,
+          dimensions: {
+            account_type: line.account_type,
+            acfr_code: line.acfr_code,
+            department_code: line.department_code,
+            full_account_number: line.full_account_number,
+            function_code: line.function_code,
+            fund_code: line.fund_code,
+            object_code: line.object_code,
+            reporting_model: line.reporting_model
+          },
           segmentCode: line.fund_code ?? undefined,
           segmentType: line.fund_code ? "fund" : undefined,
           severity: "Critical",
@@ -1976,6 +1986,16 @@ function buildTrialBalanceIntegrityExceptions({
           recommendedAction:
             "Review debit, credit, and net change columns or confirm export sign convention.",
           request,
+          dimensions: {
+            account_type: line.account_type,
+            acfr_code: line.acfr_code,
+            department_code: line.department_code,
+            full_account_number: line.full_account_number,
+            function_code: line.function_code,
+            fund_code: line.fund_code,
+            object_code: line.object_code,
+            reporting_model: line.reporting_model
+          },
           segmentCode: line.fund_code ?? undefined,
           segmentType: line.fund_code ? "fund" : undefined,
           severity: "Critical",
@@ -2057,6 +2077,7 @@ function buildExceptionRow({
     account_type?: string | null;
     acfr_code?: string | null;
     department_code?: string | null;
+    full_account_number?: string | null;
     function_code?: string | null;
     fund_code?: string | null;
     object_code?: string | null;
@@ -2094,6 +2115,7 @@ function buildExceptionRow({
     department_code: dimensions?.department_code ?? null,
     function_code: dimensions?.function_code ?? null,
     fund_code: dimensions?.fund_code ?? (segmentType === "fund" ? segmentCode ?? null : null),
+    full_account_number: dimensions?.full_account_number ?? null,
     message,
     object_code: dimensions?.object_code ?? null,
     organization_id: organizationId,

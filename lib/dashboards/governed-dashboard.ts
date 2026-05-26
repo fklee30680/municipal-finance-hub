@@ -145,6 +145,8 @@ export type TrendRow = {
 export type ExceptionRow = {
   exception_result_id: string;
   exception_category: string | null;
+  exception_key: string | null;
+  exception_scope: string | null;
   exception_type: string | null;
   severity_level: string | null;
   message: string | null;
@@ -154,6 +156,7 @@ export type ExceptionRow = {
   variance_amount: number | string | null;
   variance_percent: number | string | null;
   fund_code: string | null;
+  full_account_number: string | null;
   acfr_code: string | null;
   department_code: string | null;
   function_code: string | null;
@@ -507,14 +510,11 @@ async function loadDashboardOutput({
       .order("period", { ascending: true })
       .limit(500)
       .returns<TrendRow[]>(),
-    adminClient
-      .from("exception_results")
-      .select("exception_result_id, exception_category, exception_type, severity_level, message, recommended_review_action, comparison_amount, current_amount, variance_amount, variance_percent, fund_code, acfr_code, department_code, function_code, object_code, account_type")
-      .eq("organization_id", organizationId)
-      .eq("calculation_run_id", calculationRunId)
-      .order("created_at", { ascending: false })
-      .limit(500)
-      .returns<ExceptionRow[]>(),
+    loadExceptionRows({
+      adminClient,
+      calculationRunId,
+      organizationId
+    }),
     adminClient
       .from("mapping_coverage_results")
       .select("mapping_coverage_result_id, segment_type, segment_code, segment_name, reference_table, reference_status, coverage_issue_type, severity, affected_row_count, affected_amount, message, recommended_action")
@@ -532,7 +532,7 @@ async function loadDashboardOutput({
     }),
     dashboardFacts: facts,
     dashboardRawFacts: facts,
-    exceptions: exceptions.data ?? [],
+    exceptions,
     filterNotes: [],
     financialSummaries: [],
     mappingCoverage: mappingCoverage.data ?? [],
@@ -583,7 +583,7 @@ async function loadDashboardOutput({
         filteredFacts: [],
         rawFacts: []
       }),
-      exceptions: exceptions.data ?? [],
+      exceptions,
       filterNotes: [
         "This calculation run does not include dashboard financial facts. Rerun calculation after applying the dashboard-ready output migration to make dashboard filters fully effective."
       ],
@@ -645,6 +645,41 @@ async function loadDashboardFacts({
       throw new Error(
         `Dashboard financial facts could not be loaded. Apply the dashboard_financial_facts migration before testing dashboard filters. ${result.error.message}`
       );
+    }
+
+    rows.push(...(result.data ?? []));
+
+    if ((result.data ?? []).length < pageSize) {
+      return rows;
+    }
+  }
+}
+
+async function loadExceptionRows({
+  adminClient,
+  calculationRunId,
+  organizationId
+}: {
+  adminClient: SupabaseClient;
+  calculationRunId: string;
+  organizationId: string;
+}) {
+  const pageSize = 1000;
+  const rows: ExceptionRow[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const result = await adminClient
+      .from("exception_results")
+      .select("exception_result_id, exception_category, exception_key, exception_scope, exception_type, severity_level, message, recommended_review_action, comparison_amount, current_amount, variance_amount, variance_percent, fund_code, full_account_number, acfr_code, department_code, function_code, object_code, account_type")
+      .eq("organization_id", organizationId)
+      .eq("calculation_run_id", calculationRunId)
+      .order("created_at", { ascending: false })
+      .order("exception_result_id", { ascending: true })
+      .range(from, from + pageSize - 1)
+      .returns<ExceptionRow[]>();
+
+    if (result.error) {
+      throw new Error(`Dashboard exceptions could not be loaded. ${result.error.message}`);
     }
 
     rows.push(...(result.data ?? []));

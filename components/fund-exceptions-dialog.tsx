@@ -56,10 +56,13 @@ function fieldValue(value: string | null | undefined, fallback = "Not provided")
 
 function exceptionIdentity(row: ExceptionRow) {
   return [
+    row.exception_scope,
+    row.exception_key,
     row.severity_level,
     row.exception_category,
     row.exception_type,
     row.fund_code,
+    row.full_account_number,
     row.object_code,
     row.department_code,
     row.function_code,
@@ -160,6 +163,73 @@ function getTriggerLabel(row: ExceptionRow) {
   return titleize(row.exception_type ?? "Review");
 }
 
+function getLevelLabel(row: ExceptionRow) {
+  const scope = normalizeKey(row.exception_scope);
+  const labels: Record<string, string> = {
+    account_type: "Account type level",
+    acfr: "ACFR level",
+    acfr_object: "ACFR + account level",
+    activity_statement_line: "Statement line level",
+    balance_sheet_line: "Balance sheet line level",
+    department: "Department level",
+    department_object: "Department + account level",
+    fund: "Fund level",
+    fund_account_type: "Fund + account type level",
+    fund_object: "Fund + account level",
+    function: "Function level",
+    function_object: "Function + account level",
+    object: "Account level",
+    object_code: "Account level",
+    trial_balance_integrity: "Trial balance level",
+    variance: "Variance level"
+  };
+
+  if (labels[scope]) return labels[scope];
+  if (row.full_account_number || row.object_code) return "Account level";
+  if (row.account_type) return "Account type level";
+  if (row.acfr_code) return "ACFR level";
+  if (row.function_code) return "Function level";
+  if (row.department_code) return "Department level";
+  if (row.fund_code) return "Fund level";
+  return "Calculation level";
+}
+
+function getAccountDisplay(row: ExceptionRow) {
+  if (row.full_account_number) return row.full_account_number;
+
+  if (row.object_code) {
+    const parts = [
+      row.fund_code,
+      row.department_code,
+      row.function_code,
+      row.acfr_code,
+      row.object_code
+    ].filter((value): value is string => Boolean(value?.trim()));
+
+    return parts.length > 1 ? parts.join("-") : `Object ${row.object_code}`;
+  }
+
+  const scope = normalizeKey(row.exception_scope);
+  if (scope.includes("account_type") && row.account_type) {
+    return `Account type: ${titleize(row.account_type)}`;
+  }
+  if (scope.includes("department") && row.department_code) {
+    return `Department ${row.department_code}`;
+  }
+  if (scope.includes("function") && row.function_code) {
+    return `Function ${row.function_code}`;
+  }
+  if (scope.includes("acfr") && row.acfr_code) {
+    return `ACFR ${row.acfr_code}`;
+  }
+  if (scope.includes("fund") && row.fund_code) {
+    return `Fund ${row.fund_code}`;
+  }
+  if (row.account_type) return `Account type: ${titleize(row.account_type)}`;
+  if (row.fund_code) return `Fund ${row.fund_code}`;
+  return "Calculation-level warning";
+}
+
 function getPrimaryAmount(row: ExceptionRow) {
   return row.variance_amount ?? row.current_amount;
 }
@@ -190,6 +260,9 @@ function SeverityPill({ severity }: { severity: string | null }) {
 }
 
 function ExceptionReviewCard({ row }: { row: ExceptionRow }) {
+  const levelLabel = getLevelLabel(row);
+  const accountDisplay = getAccountDisplay(row);
+
   return (
     <details className="rounded-md border border-border bg-card p-3">
       <summary className="cursor-pointer list-none">
@@ -201,9 +274,12 @@ function ExceptionReviewCard({ row }: { row: ExceptionRow }) {
                 {getTriggerLabel(row)}
               </span>
               <span className="rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground">
-                Object {fieldValue(row.object_code)}
+                {levelLabel}
               </span>
             </div>
+            <p className="text-sm font-semibold text-foreground">
+              {accountDisplay}
+            </p>
             <p className="text-sm font-medium text-foreground">
               {row.message ?? "Exception requires review."}
             </p>
@@ -228,6 +304,8 @@ function ExceptionReviewCard({ row }: { row: ExceptionRow }) {
         <Detail label="Variance percent" value={formatPercent(row.variance_percent)} />
         <Detail label="Category" value={titleize(row.exception_category)} />
         <Detail label="Type" value={titleize(row.exception_type)} />
+        <Detail label="Warning level" value={levelLabel} />
+        <Detail label="Account / dimension" value={accountDisplay} />
         <Detail label="Account type" value={titleize(row.account_type)} />
         <Detail label="Object" value={fieldValue(row.object_code)} />
         <div className="md:col-span-2 xl:col-span-4">
@@ -251,11 +329,9 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 export function FundExceptionsDialog({
-  exceptionCount,
   exceptions,
   fund
 }: {
-  exceptionCount: number;
   exceptions: ExceptionRow[];
   fund: string;
 }) {
@@ -271,7 +347,7 @@ export function FundExceptionsDialog({
   ).length;
   const unmappedCount = reviewRows.filter((row) => !row.object_code).length;
 
-  if (exceptionCount === 0) {
+  if (exceptions.length === 0) {
     return <span>0</span>;
   }
 
@@ -285,7 +361,7 @@ export function FundExceptionsDialog({
         type="button"
         variant="outline"
       >
-        {exceptionCount}
+        {reviewRows.length}
       </Button>
       <dialog
         aria-labelledby={titleId}
@@ -313,7 +389,7 @@ export function FundExceptionsDialog({
         <div className="max-h-[74vh] space-y-5 overflow-y-auto p-5">
           {reviewRows.length < exceptions.length ? (
             <p className="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground">
-              Showing {reviewRows.length} unique review rows. {exceptions.length - reviewRows.length} exact duplicate rows were collapsed for readability.
+              Showing {reviewRows.length} unique review rows from {exceptions.length} source rows. Exact duplicate rows were collapsed for readability.
             </p>
           ) : null}
 

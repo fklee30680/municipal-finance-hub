@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { CashInvestmentsDialog } from "@/components/cash-investments-dialog";
 import { DashboardRunCalculationForm } from "@/components/dashboard-run-calculation-form";
 import { FundExceptionsDialog } from "@/components/fund-exceptions-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -318,9 +319,11 @@ export function DashboardFilterNotes({ notes }: { notes: string[] }) {
 }
 
 export function ExecutiveFinancialPositionView({
+  options,
   output,
   selection
 }: {
+  options: DashboardOptions;
   output: DashboardOutput;
   selection: DashboardSelection;
 }) {
@@ -334,6 +337,7 @@ export function ExecutiveFinancialPositionView({
   );
   const facts = output.dashboardFacts;
   const totals = summarizeFacts(facts);
+  const cashFacts = facts.filter(isCashOrInvestmentFact);
   const helper = hasDisplayFilter ? "Selected dashboard filters" : "Governed dashboard facts";
 
   if (facts.length === 0) {
@@ -385,7 +389,17 @@ export function ExecutiveFinancialPositionView({
               : helper
           }
           label="Cash / investments"
-          value={formatMaybeAmount(totals.cashAndInvestments)}
+          value={
+            totals.cashAndInvestments === null ? (
+              formatMaybeAmount(totals.cashAndInvestments)
+            ) : (
+              <CashInvestmentsDialog
+                facts={cashFacts}
+                objectNames={options.objects}
+                total={totals.cashAndInvestments}
+              />
+            )
+          }
         />
       </div>
       <p className="text-sm text-muted-foreground">
@@ -1016,7 +1030,7 @@ function MetricCard({
 }: {
   helper?: string;
   label: string;
-  value: string;
+  value: ReactNode;
 }) {
   return (
     <Card>

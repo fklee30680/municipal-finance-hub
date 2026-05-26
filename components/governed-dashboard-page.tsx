@@ -145,6 +145,7 @@ export async function GovernedDashboardPage({
           {model.calculationRun ? (
             <>
               <ExecutiveFinancialPositionView
+                options={model.options}
                 output={model.output}
                 selection={model.selection}
               />

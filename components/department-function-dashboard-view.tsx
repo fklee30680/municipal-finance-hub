@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 
 import type {
   DashboardFinancialFactRow,
@@ -18,6 +18,12 @@ type AmountPair = {
 type FunctionNode = AmountPair & {
   code: string;
   label: string;
+};
+
+type AccountDetailRow = AmountPair & {
+  accountType: string;
+  objectCode: string;
+  objectName: string;
 };
 
 type FundNode = AmountPair & {
@@ -51,6 +57,10 @@ export function DepartmentFunctionHierarchyView({
   const hierarchy = useMemo(
     () => buildHierarchy({ options, output, selection }),
     [options, output, selection]
+  );
+  const objectNames = useMemo(
+    () => new Map(options.objects.map((row) => [row.code, row.name])),
+    [options.objects]
   );
   const [openDepartments, setOpenDepartments] = useState(
     () => new Set(hierarchy.defaultOpenDepartments)
@@ -148,6 +158,15 @@ export function DepartmentFunctionHierarchyView({
                                 expenses={functionNode.expenses}
                                 key={`${fundKey}|${functionNode.code}`}
                                 label={functionNode.label}
+                                labelContent={
+                                  <FunctionAccountDetailDialog
+                                    department={department}
+                                    facts={output.dashboardFacts}
+                                    fund={fund}
+                                    functionNode={functionNode}
+                                    objectNames={objectNames}
+                                  />
+                                }
                                 level="function"
                                 revenues={functionNode.revenues}
                               />
@@ -172,6 +191,7 @@ function HierarchyRow({
   expanded,
   expenses,
   label,
+  labelContent,
   level,
   onToggle,
   revenues
@@ -180,6 +200,7 @@ function HierarchyRow({
   expanded?: boolean;
   expenses: number;
   label: string;
+  labelContent?: ReactNode;
   level: "department" | "fund" | "function";
   onToggle?: () => void;
   revenues: number;
@@ -217,7 +238,7 @@ function HierarchyRow({
         ) : (
           <span className="h-7 w-7 shrink-0" />
         )}
-        <span className="truncate">{label}</span>
+        {labelContent ?? <span className="truncate">{label}</span>}
       </div>
       <div className="text-right tabular-nums text-muted-foreground">
         {formatAmount(revenues)}
@@ -225,6 +246,140 @@ function HierarchyRow({
       <div className="text-right tabular-nums text-muted-foreground">
         {formatAmount(expenses)}
       </div>
+    </div>
+  );
+}
+
+function FunctionAccountDetailDialog({
+  department,
+  facts,
+  fund,
+  functionNode,
+  objectNames
+}: {
+  department: DepartmentNode;
+  facts: DashboardFinancialFactRow[];
+  fund: FundNode;
+  functionNode: FunctionNode;
+  objectNames: Map<string, string>;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const detail = useMemo(
+    () =>
+      buildAccountDetailRows({
+        departmentCode: department.code,
+        facts,
+        fundCode: fund.code,
+        functionCode: functionNode.code,
+        objectNames
+      }),
+    [department.code, facts, fund.code, functionNode.code, objectNames]
+  );
+
+  return (
+    <>
+      <button
+        className="truncate text-left text-sm text-primary underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-ring"
+        onClick={() => dialogRef.current?.showModal()}
+        type="button"
+      >
+        {functionNode.label}
+      </button>
+      <dialog
+        className="w-[min(960px,calc(100vw-2rem))] rounded-lg border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40"
+        ref={dialogRef}
+      >
+        <div className="border-b border-border p-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-primary">Account Detail</p>
+              <h3 className="mt-1 text-lg font-semibold">
+                {functionNode.label}
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {department.label} / {fund.label}
+              </p>
+            </div>
+            <button
+              className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              onClick={() => dialogRef.current?.close()}
+              type="button"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[70vh] overflow-auto p-5">
+          <div className="mb-4 grid gap-3 text-sm md:grid-cols-3">
+            <MiniMetric label="Revenue total" value={formatAmount(detail.revenueTotal)} />
+            <MiniMetric label="Expense total" value={formatAmount(detail.expenseTotal)} />
+            <MiniMetric label="Objects" value={detail.rows.length} />
+          </div>
+
+          {detail.rows.length === 0 ? (
+            <EmptyState>
+              No revenue or expense object facts are available for this fund and function.
+            </EmptyState>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-muted-foreground">
+                    <th className="py-3 pr-4 font-medium">Object</th>
+                    <th className="py-3 pr-4 font-medium">Object Name</th>
+                    <th className="py-3 pr-4 font-medium">Account Type</th>
+                    <th className="py-3 pr-4 text-right font-medium">Revenue</th>
+                    <th className="py-3 pr-4 text-right font-medium">Expense</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.rows.map((row) => (
+                    <tr className="border-b border-border align-top" key={`${row.objectCode}|${row.accountType}`}>
+                      <td className="py-3 pr-4 font-medium text-foreground">{row.objectCode}</td>
+                      <td className="py-3 pr-4 text-muted-foreground">{row.objectName}</td>
+                      <td className="py-3 pr-4 text-muted-foreground">{titleize(row.accountType)}</td>
+                      <td className="py-3 pr-4 text-right tabular-nums text-muted-foreground">
+                        {formatAmount(row.revenues)}
+                      </td>
+                      <td className="py-3 pr-4 text-right tabular-nums text-muted-foreground">
+                        {formatAmount(row.expenses)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-border font-semibold text-foreground">
+                    <td className="py-3 pr-4" colSpan={3}>Total</td>
+                    <td className="py-3 pr-4 text-right tabular-nums">
+                      {formatAmount(detail.revenueTotal)}
+                    </td>
+                    <td className="py-3 pr-4 text-right tabular-nums">
+                      {formatAmount(detail.expenseTotal)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {detail.excludedFactCount > 0 ? (
+            <p className="mt-4 rounded-md border border-border bg-muted/20 p-3 text-sm text-muted-foreground">
+              {detail.excludedFactCount} governed fact row(s) for this fund/function are not
+              shown because they are not classified as revenue or expense.
+            </p>
+          ) : null}
+        </div>
+      </dialog>
+    </>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-md border border-border bg-background p-3">
+      <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
     </div>
   );
 }
@@ -304,6 +459,70 @@ function buildHierarchy({
     defaultOpenFunds,
     departments: [...departments.values()].sort(sortNodes),
     sourceFactCount: sourceFacts.length
+  };
+}
+
+function buildAccountDetailRows({
+  departmentCode,
+  facts,
+  fundCode,
+  functionCode,
+  objectNames
+}: {
+  departmentCode: string;
+  facts: DashboardFinancialFactRow[];
+  fundCode: string;
+  functionCode: string;
+  objectNames: Map<string, string>;
+}) {
+  const contextFacts = facts.filter(
+    (fact) =>
+      fact.summary_type === "dashboard_detail" &&
+      codeValue(fact.department_code) === departmentCode &&
+      codeValue(fact.fund_code) === fundCode &&
+      codeValue(fact.function_code) === functionCode
+  );
+  const rows = new Map<string, AccountDetailRow>();
+  let excludedFactCount = 0;
+
+  for (const fact of contextFacts) {
+    const accountType = normalizeKey(fact.account_type);
+    const amountField = isRevenueType(accountType)
+      ? "revenues"
+      : isExpenseType(accountType)
+        ? "expenses"
+        : null;
+
+    if (!amountField) {
+      excludedFactCount += 1;
+      continue;
+    }
+
+    const objectCode = codeValue(fact.object_code);
+    const key = `${objectCode}|${accountType || "not_classified"}`;
+    const row = rows.get(key) ?? {
+      accountType: accountType || "not_classified",
+      expenses: 0,
+      objectCode: objectCode === "not_provided" ? "Not provided" : objectCode,
+      objectName: objectNames.get(objectCode) ?? "Not provided",
+      revenues: 0
+    };
+
+    row[amountField] += factAmount(fact);
+    rows.set(key, row);
+  }
+
+  const sortedRows = [...rows.values()].sort(
+    (a, b) =>
+      a.objectCode.localeCompare(b.objectCode) ||
+      a.accountType.localeCompare(b.accountType)
+  );
+
+  return {
+    excludedFactCount,
+    expenseTotal: sortedRows.reduce((total, row) => total + row.expenses, 0),
+    revenueTotal: sortedRows.reduce((total, row) => total + row.revenues, 0),
+    rows: sortedRows
   };
 }
 
@@ -443,4 +662,13 @@ function sortNodes<T extends { code: string; label: string }>(a: T, b: T) {
 
 function cleanId(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function titleize(value: string) {
+  return value
+    .replaceAll("_", " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }

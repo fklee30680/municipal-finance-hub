@@ -231,6 +231,7 @@ export type DashboardOptions = {
   fiscalPeriods: FiscalPeriodOption[];
   funds: FundOption[];
   functions: Array<{ code: string; name: string }>;
+  objects: Array<{ code: string; name: string }>;
   statementLines: string[];
 };
 
@@ -317,7 +318,7 @@ export async function loadDashboardOptions({
       .returns<FundOption[]>(),
     adminClient
       .from("objects")
-      .select("account_type, balance_sheet_line, activity_statement_line")
+      .select("object_code, object_name, account_type, balance_sheet_line, activity_statement_line")
       .eq("organization_id", organizationId)
       .order("object_code", { ascending: true })
       .limit(1000)
@@ -326,6 +327,8 @@ export async function loadDashboardOptions({
           account_type: string | null;
           activity_statement_line: string | null;
           balance_sheet_line: string | null;
+          object_code: string;
+          object_name: string;
         }>
       >(),
     adminClient
@@ -366,6 +369,10 @@ export async function loadDashboardOptions({
     functions: (functions.data ?? []).map((row) => ({
       code: row.function_code,
       name: row.function_name
+    })),
+    objects: (objects.data ?? []).map((row) => ({
+      code: row.object_code,
+      name: row.object_name
     })),
     statementLines: uniqueText(
       (objects.data ?? []).flatMap((row) => [

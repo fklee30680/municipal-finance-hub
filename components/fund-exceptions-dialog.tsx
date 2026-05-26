@@ -165,6 +165,8 @@ function getTriggerLabel(row: ExceptionRow) {
 
 function getLevelLabel(row: ExceptionRow) {
   const scope = normalizeKey(row.exception_scope);
+  if (scope === "object" && !row.object_code && row.account_type) return "Account type level";
+
   const labels: Record<string, string> = {
     account_type: "Account type level",
     acfr: "ACFR level",
@@ -185,7 +187,6 @@ function getLevelLabel(row: ExceptionRow) {
   };
 
   if (labels[scope]) return labels[scope];
-  if (scope === "object" && !row.object_code && row.account_type) return "Account type level";
   if (row.full_account_number || row.object_code) return "Account level";
   if (row.account_type) return "Account type level";
   if (row.acfr_code) return "ACFR level";
@@ -238,6 +239,20 @@ function getPrimaryAmount(row: ExceptionRow) {
   return row.variance_amount ?? row.current_amount;
 }
 
+function getDisplayMessage(row: ExceptionRow) {
+  const message = row.message ?? "Exception requires review.";
+  const isLegacyUnmappedObjectMessage =
+    normalizeKey(row.exception_category) === "variance" &&
+    !row.object_code &&
+    normalizeKey(message).startsWith("object_unmapped_has_a_material");
+
+  if (!isLegacyUnmappedObjectMessage) return message;
+
+  const subject = getAccountDisplay(row);
+  const varianceType = message.match(/material (.+) change/i)?.[1] ?? "variance";
+  return `${subject} has a material ${varianceType} change.`;
+}
+
 function MetricCard({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-md border border-border bg-background p-3">
@@ -266,6 +281,7 @@ function SeverityPill({ severity }: { severity: string | null }) {
 function ExceptionReviewCard({ row }: { row: ExceptionRow }) {
   const levelLabel = getLevelLabel(row);
   const accountDisplay = getAccountDisplay(row);
+  const displayMessage = getDisplayMessage(row);
 
   return (
     <details className="rounded-md border border-border bg-card p-3">
@@ -285,7 +301,7 @@ function ExceptionReviewCard({ row }: { row: ExceptionRow }) {
               {accountDisplay}
             </p>
             <p className="text-sm font-medium text-foreground">
-              {row.message ?? "Exception requires review."}
+              {displayMessage}
             </p>
             <p className="text-xs text-muted-foreground">
               Department {fieldValue(row.department_code)} / Function {fieldValue(row.function_code)} / ACFR {fieldValue(row.acfr_code)}

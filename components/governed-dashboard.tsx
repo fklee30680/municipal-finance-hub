@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { CashInvestmentsDialog } from "@/components/cash-investments-dialog";
+import { CashInvestmentsSummaryCard } from "@/components/cash-investments-dialog";
 import { DashboardRunCalculationForm } from "@/components/dashboard-run-calculation-form";
 import { FundExceptionsDialog } from "@/components/fund-exceptions-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -382,25 +382,18 @@ export function ExecutiveFinancialPositionView({
           label="Ending balance"
           value={formatAmount(totals.endingBalance)}
         />
-        <MetricCard
-          helper={
-            totals.cashAndInvestments === null
-              ? "Cash / investments not available from current classifications."
-              : helper
-          }
-          label="Cash / investments"
-          value={
-            totals.cashAndInvestments === null ? (
-              formatMaybeAmount(totals.cashAndInvestments)
-            ) : (
-              <CashInvestmentsDialog
-                facts={cashFacts}
-                objectNames={options.objects}
-                total={totals.cashAndInvestments}
-              />
-            )
-          }
-        />
+        {totals.cashAndInvestments === null ? (
+          <MetricCard
+            helper="Cash / investments not available from current classifications."
+            label="Cash & investments"
+            value={formatMaybeAmount(totals.cashAndInvestments)}
+          />
+        ) : (
+          <CashInvestmentsSummaryCard
+            facts={cashFacts}
+            objectNames={options.objects}
+          />
+        )}
       </div>
       <p className="text-sm text-muted-foreground">
         Active filters: {formatActiveFilters(selection)}

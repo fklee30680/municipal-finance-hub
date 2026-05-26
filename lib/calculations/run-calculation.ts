@@ -1753,6 +1753,7 @@ function buildVarianceExceptions({
         calculationRunId,
         category: "variance",
         currentAmount: Number(variance.current_amount ?? 0),
+        comparisonAmount: Number(variance.comparison_amount ?? 0),
         dimensions: {
           account_type: textOrNull(variance.account_type),
           acfr_code: textOrNull(variance.acfr_code),
@@ -2033,6 +2034,7 @@ function buildExceptionRow({
   calculationRunId,
   category,
   currentAmount,
+  comparisonAmount,
   dimensions,
   importBatchIds,
   message,
@@ -2050,6 +2052,7 @@ function buildExceptionRow({
   calculationRunId: string;
   category: string;
   currentAmount?: number;
+  comparisonAmount?: number;
   dimensions?: {
     account_type?: string | null;
     acfr_code?: string | null;
@@ -2077,6 +2080,7 @@ function buildExceptionRow({
 
   return {
     calculation_run_id: calculationRunId,
+    comparison_amount: comparisonAmount ?? null,
     current_amount: currentAmount ?? null,
     dollar_impact: currentAmount ?? varianceAmount ?? null,
     exception_category: category,

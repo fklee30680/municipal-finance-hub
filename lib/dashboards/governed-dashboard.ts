@@ -149,7 +149,10 @@ export type ExceptionRow = {
   severity_level: string | null;
   message: string | null;
   recommended_review_action: string | null;
+  comparison_amount: number | string | null;
   current_amount: number | string | null;
+  variance_amount: number | string | null;
+  variance_percent: number | string | null;
   fund_code: string | null;
   acfr_code: string | null;
   department_code: string | null;
@@ -506,7 +509,7 @@ async function loadDashboardOutput({
       .returns<TrendRow[]>(),
     adminClient
       .from("exception_results")
-      .select("exception_result_id, exception_category, exception_type, severity_level, message, recommended_review_action, current_amount, fund_code, acfr_code, department_code, function_code, object_code, account_type")
+      .select("exception_result_id, exception_category, exception_type, severity_level, message, recommended_review_action, comparison_amount, current_amount, variance_amount, variance_percent, fund_code, acfr_code, department_code, function_code, object_code, account_type")
       .eq("organization_id", organizationId)
       .eq("calculation_run_id", calculationRunId)
       .order("created_at", { ascending: false })

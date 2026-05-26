@@ -185,6 +185,7 @@ function getLevelLabel(row: ExceptionRow) {
   };
 
   if (labels[scope]) return labels[scope];
+  if (scope === "object" && !row.object_code && row.account_type) return "Account type level";
   if (row.full_account_number || row.object_code) return "Account level";
   if (row.account_type) return "Account type level";
   if (row.acfr_code) return "ACFR level";
@@ -210,6 +211,9 @@ function getAccountDisplay(row: ExceptionRow) {
   }
 
   const scope = normalizeKey(row.exception_scope);
+  if (scope === "object" && !row.object_code && row.account_type) {
+    return `Account type: ${titleize(row.account_type)}`;
+  }
   if (scope.includes("account_type") && row.account_type) {
     return `Account type: ${titleize(row.account_type)}`;
   }
@@ -413,11 +417,10 @@ export function FundExceptionsDialog({
             </p>
           ) : (
             <div className="space-y-3">
-              {groups.map((group, index) => (
+              {groups.map((group) => (
                 <details
                   className="rounded-md border border-border bg-background"
                   key={group.accountType}
-                  open={index === 0 || group.highCount > 0}
                 >
                   <summary className="cursor-pointer list-none px-4 py-3">
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">

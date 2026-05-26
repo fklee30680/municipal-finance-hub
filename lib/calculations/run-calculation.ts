@@ -1748,8 +1748,11 @@ function buildVarianceExceptions({
 }) {
   return variances
     .filter((variance) => ["Warning", "High"].includes(String(variance.severity)))
-    .map((variance) =>
-      buildExceptionRow({
+    .map((variance) => {
+      const varianceScope = String(variance.variance_scope ?? "variance");
+      const varianceKey = String(variance.variance_key ?? variance.object_code ?? "");
+
+      return buildExceptionRow({
         calculationRunId,
         category: "variance",
         currentAmount: Number(variance.current_amount ?? 0),
@@ -1764,13 +1767,13 @@ function buildVarianceExceptions({
           reporting_model: textOrNull(variance.reporting_model)
         },
         importBatchIds,
-        message: `Object ${variance.object_code ?? "unmapped"} has a material ${variance.variance_type} change.`,
+        message: `${formatVarianceSubject(varianceScope, variance)} has a material ${variance.variance_type} change.`,
         organizationId: request.organizationId,
         period: request.periodTo,
         recommendedAction: "Review the underlying posted trial balance activity and object classification.",
         request,
-        segmentCode: String(variance.variance_key ?? variance.object_code ?? ""),
-        segmentType: String(variance.variance_scope ?? "variance"),
+        segmentCode: varianceKey,
+        segmentType: varianceScope,
         severity: variance.severity as "Warning" | "High",
         type:
           Math.abs(Number(variance.variance_percent ?? 0)) > 0
@@ -1781,8 +1784,50 @@ function buildVarianceExceptions({
           variance.variance_percent === null
             ? null
             : Number(variance.variance_percent ?? 0)
-      })
-    );
+      });
+    });
+}
+
+function formatVarianceSubject(scope: string, variance: Record<string, unknown>) {
+  const key = text(variance.variance_key);
+  const objectCode = text(variance.object_code);
+  const accountType = text(variance.account_type);
+  const fundCode = text(variance.fund_code);
+  const departmentCode = text(variance.department_code);
+  const functionCode = text(variance.function_code);
+  const acfrCode = text(variance.acfr_code);
+
+  switch (scope) {
+    case "fund":
+      return `Fund ${key || fundCode || "not provided"}`;
+    case "fund_object":
+      return `Fund ${fundCode || "not provided"} object ${objectCode || "not provided"}`;
+    case "fund_account_type":
+      return `Fund ${fundCode || "not provided"} account type ${accountType || "not classified"}`;
+    case "department":
+      return `Department ${key || departmentCode || "not provided"}`;
+    case "department_object":
+      return `Department ${departmentCode || "not provided"} object ${objectCode || "not provided"}`;
+    case "function":
+      return `Function ${key || functionCode || "not provided"}`;
+    case "function_object":
+      return `Function ${functionCode || "not provided"} object ${objectCode || "not provided"}`;
+    case "acfr":
+      return `ACFR ${key || acfrCode || "not provided"}`;
+    case "acfr_object":
+      return `ACFR ${acfrCode || "not provided"} object ${objectCode || "not provided"}`;
+    case "object_code":
+    case "object":
+      return `Object ${objectCode || key || "not provided"}`;
+    case "account_type":
+      return `Account type ${accountType || key || "not classified"}`;
+    case "activity_statement_line":
+      return `Activity statement line ${key || "not provided"}`;
+    case "balance_sheet_line":
+      return `Balance sheet line ${key || "not provided"}`;
+    default:
+      return `Variance scope ${scope || "not provided"} ${key || "not provided"}`;
+  }
 }
 
 function buildCashExceptions({

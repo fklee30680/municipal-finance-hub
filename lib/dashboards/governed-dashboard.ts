@@ -969,11 +969,21 @@ function applyDashboardSelectionFilters(
 }
 
 function buildFilterContext(selection: DashboardSelection, options: DashboardOptions) {
+  const fundCodesForReportingScope = new Set(
+    options.funds
+      .filter((fund) => fundIsInReportingScope(fund, selection.reportingScope))
+      .map((fund) => fund.fund_code)
+  );
   return {
+    fundCodesForReportingScope,
     fundCodesForGroup: new Set(
       selection.fundGroup
         ? options.funds
-            .filter((fund) => fund.fund_group === selection.fundGroup)
+            .filter(
+              (fund) =>
+                fund.fund_group === selection.fundGroup &&
+                fundCodesForReportingScope.has(fund.fund_code)
+            )
             .map((fund) => fund.fund_code)
         : []
     )
@@ -987,6 +997,10 @@ function filterFinancialRows(
 ) {
   return rows
     .filter((row) => {
+      if (!financialRowIsInReportingScope(row, filterContext)) {
+        return false;
+      }
+
       if (selection.fund && !financialRowMatchesDimension(row, "fund", selection.fund)) {
         return false;
       }
@@ -1134,6 +1148,14 @@ function filterMappingRows(
   filterNotes: string[]
 ) {
   return rows.filter((row) => {
+    if (
+      row.segment_type === "fund" &&
+      row.segment_code &&
+      !filterContext.fundCodesForReportingScope.has(row.segment_code)
+    ) {
+      return false;
+    }
+
     if (selection.exceptionSeverity && row.severity !== selection.exceptionSeverity) {
       return false;
     }
@@ -1249,6 +1271,11 @@ function filterDimensionRows<
 
   return rows
     .filter((row) => {
+      const rowFund = text(row.fund_code);
+      if (rowFund && !filterContext.fundCodesForReportingScope.has(rowFund)) {
+        return false;
+      }
+
       if (selection.fund && !matchesRowDimension(row, "fund_code", selection.fund, keepGlobalRows)) {
         return false;
       }
@@ -1303,6 +1330,39 @@ function financialRowMatchesDimension(
   const dimensionField = getFinancialDimensionField(row);
   if (dimensionField !== getFinancialFieldForDimension(dimension)) return false;
   return getFinancialDimensionValue(row, dimension) === value;
+}
+
+function financialRowIsInReportingScope(
+  row: FinancialSummaryRow,
+  filterContext: ReturnType<typeof buildFilterContext>
+) {
+  const rowFund = text(row.fund_code);
+  return !rowFund || filterContext.fundCodesForReportingScope.has(rowFund);
+}
+
+function fundIsInReportingScope(
+  fund: DashboardOptions["funds"][number],
+  reportingScope: DashboardSelection["reportingScope"]
+) {
+  if (reportingScope === "standard") {
+    return booleanValue(fund.include_in_standard_reporting, true);
+  }
+
+  if (text(fund.active_status) === "inactive") {
+    return false;
+  }
+
+  if (reportingScope === "all_active") {
+    return true;
+  }
+
+  const treatment = text(fund.reporting_treatment);
+  return (
+    booleanValue(fund.include_in_standard_reporting, true) ||
+    booleanValue(fund.include_in_cash_reconciliation, false) ||
+    treatment === "pooled_cash" ||
+    treatment === "reconciliation_only"
+  );
 }
 
 function financialRowMatchesAnyDimension(
@@ -1456,6 +1516,16 @@ function integer(value: string | undefined) {
 
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function booleanValue(value: unknown, fallback: boolean) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "t", "yes", "y", "1"].includes(normalized)) return true;
+    if (["false", "f", "no", "n", "0"].includes(normalized)) return false;
+  }
+  return fallback;
 }
 
 function uniqueText(values: Array<string | null | undefined>) {

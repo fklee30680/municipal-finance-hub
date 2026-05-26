@@ -160,7 +160,7 @@ export async function GovernedDashboardPage({
         </DashboardContainer>
 
         <DashboardContainer
-          defaultExpanded={view === "exceptions" || hasIssues}
+          defaultExpanded={view === "exceptions"}
           description="Shows critical issues, warnings, mapping coverage problems, and data quality items that affect confidence in the dashboard."
           metric={`${issueCounts.critical} critical / ${issueCounts.warning} warning`}
           status={hasIssues ? "Needs review" : "No issues"}

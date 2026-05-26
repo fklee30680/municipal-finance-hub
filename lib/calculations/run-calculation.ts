@@ -190,7 +190,7 @@ export async function runAnalysisCalculation({
       thresholdConfig
     });
     const coverageIssues = buildMappingCoverageIssues({
-      lines: currentLines,
+      lines: scopedCurrentLines,
       references
     });
     const results = buildResults({

@@ -234,37 +234,53 @@ function ReportSourceSelection({
       </CardHeader>
       <CardContent className="space-y-4">
         <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-[repeat(5,minmax(0,1fr))_auto]" method="get">
-          <Select label="Fiscal year" name="fiscalYear" value={String(selection.fiscalYear)}>
+          <Select
+            defaultValue={String(selection.fiscalYear)}
+            label="Fiscal year"
+            name="fiscalYear"
+          >
             {fiscalYears.map((year) => (
               <option key={year} value={year}>
                 FY {year}
               </option>
             ))}
           </Select>
-          <Select label="Period from" name="periodFrom" value={String(selection.periodFrom)}>
+          <Select
+            defaultValue={String(selection.periodFrom)}
+            label="Period from"
+            name="periodFrom"
+          >
             {periods.map((period) => (
               <option key={period.period} value={period.period}>
                 P{period.period} - {period.period_name}
               </option>
             ))}
           </Select>
-          <Select label="Period to" name="periodTo" value={String(selection.periodTo)}>
+          <Select
+            defaultValue={String(selection.periodTo)}
+            label="Period to"
+            name="periodTo"
+          >
             {periods.map((period) => (
               <option key={period.period} value={period.period}>
                 P{period.period} - {period.period_name}
               </option>
             ))}
           </Select>
-          <Select label="Reporting scope" name="reportingScope" value={selection.reportingScope}>
+          <Select
+            defaultValue={selection.reportingScope}
+            label="Reporting scope"
+            name="reportingScope"
+          >
             <option value="standard">Standard Reporting</option>
             <option value="cash_reconciliation">Include Pooled Cash / Reconciliation</option>
             <option value="all_active">All Active Funds</option>
           </Select>
           <Select
             disabled={eligibleRuns.length === 0}
+            defaultValue={selectedRun?.calculation_run_id ?? ""}
             label="Calculation run"
             name="calculationRunId"
-            value={selectedRun?.calculation_run_id ?? ""}
           >
             {eligibleRuns.length === 0 ? (
               <option value="">No eligible runs</option>
@@ -555,16 +571,16 @@ function formatSectionSourceNote({
 
 function Select({
   children,
+  defaultValue,
   disabled,
   label,
-  name,
-  value
+  name
 }: {
   children: ReactNode;
+  defaultValue: string;
   disabled?: boolean;
   label: string;
   name: string;
-  value: string;
 }) {
   return (
     <label className="space-y-1 text-sm font-medium text-foreground">
@@ -572,8 +588,8 @@ function Select({
       <select
         className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
         disabled={disabled}
+        defaultValue={defaultValue}
         name={name}
-        value={value}
       >
         {children}
       </select>

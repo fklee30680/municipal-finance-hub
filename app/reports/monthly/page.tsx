@@ -4,6 +4,10 @@ import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { formatReportingScope } from "@/components/governed-dashboard";
+import {
+  MonthlyReportSection,
+  type MonthlyReportSectionStatus
+} from "@/components/monthly-report-section";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ensureAppUserForAuthUser } from "@/lib/auth/app-user";
 import { requireUser } from "@/lib/auth/session";
@@ -42,45 +46,60 @@ type ReadinessCounts = {
   warning: number;
 };
 
+type ReportSourceAvailability = {
+  dashboardSummary: boolean;
+  departmentFunctionFacts: boolean;
+  exceptionsAndReadiness: boolean;
+  fundFacts: boolean;
+  statementSummaries: boolean;
+  variances: boolean;
+};
+
 const eligibleRunStatuses = ["completed", "completed_with_warnings"];
 
 const reportSections = [
   {
-    note: "Will use dashboard_financial_facts and statement_summary_results for the selected calculation run after report drafting is built.",
+    availabilityKey: "dashboardSummary",
     purpose: "Frame the month for CFO and governing-body review.",
+    sourceLabel: "dashboard financial facts or statement summary",
     title: "Executive Summary"
   },
   {
-    note: "Will use statement_summary_results and dashboard_financial_facts for the selected calculation run.",
+    availabilityKey: "statementSummaries",
     purpose: "Present activity and position statements for the selected period range.",
+    sourceLabel: "statement summary",
     title: "Financial Statements"
   },
   {
-    note: "Will use dashboard_financial_facts at fund grains for the selected calculation run.",
+    availabilityKey: "fundFacts",
     purpose: "Explain fund-level performance and liquidity considerations.",
+    sourceLabel: "fund-level dashboard financial facts",
     title: "Fund Highlights"
   },
   {
-    note: "Will use dashboard_financial_facts at department, fund, and function grains for the selected calculation run.",
+    availabilityKey: "departmentFunctionFacts",
     purpose: "Summarize operating-area activity by department and function.",
+    sourceLabel: "department and function dashboard financial facts",
     title: "Department / Function Highlights"
   },
   {
-    note: "Will use variance_results and governed dashboard facts for the selected calculation run.",
+    availabilityKey: "variances",
     purpose: "Identify material changes that should be reviewed before drafting.",
+    sourceLabel: "variance results",
     title: "Material Changes"
   },
   {
-    note: "Will use exception_results and mapping_coverage_results for the selected calculation run.",
+    availabilityKey: "exceptionsAndReadiness",
     purpose: "Surface issues that affect confidence in the monthly report.",
+    sourceLabel: "exception and mapping coverage results",
     title: "Exceptions and Data Readiness"
-  },
-  {
-    note: "Will use calculation_runs lineage fields and dependency metadata for the selected calculation run.",
-    purpose: "Show the calculation run, source batches, posting runs, and validation runs behind the report.",
-    title: "Traceability"
   }
-];
+] satisfies Array<{
+  availabilityKey: keyof ReportSourceAvailability;
+  purpose: string;
+  sourceLabel: string;
+  title: string;
+}>;
 
 export default async function MonthlyReportPage({
   searchParams
@@ -117,13 +136,23 @@ export default async function MonthlyReportPage({
       (run) => run.calculation_run_id === selection.calculationRunId
     )
   );
-  const issueCounts = selectedRun
-    ? await loadReadinessCounts({
-        adminClient,
-        calculationRunId: selectedRun.calculation_run_id,
-        organizationId: appUser.organization_id
-      })
-    : { critical: 0, warning: 0 };
+  const [issueCounts, sourceAvailability] = selectedRun
+    ? await Promise.all([
+        loadReadinessCounts({
+          adminClient,
+          calculationRunId: selectedRun.calculation_run_id,
+          organizationId: appUser.organization_id
+        }),
+        loadReportSourceAvailability({
+          adminClient,
+          calculationRunId: selectedRun.calculation_run_id,
+          organizationId: appUser.organization_id
+        })
+      ])
+    : [
+        { critical: 0, warning: 0 },
+        emptyReportSourceAvailability()
+      ];
 
   return (
     <AppShell>
@@ -136,7 +165,7 @@ export default async function MonthlyReportPage({
             </h1>
             <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
               Select the governed calculation run that will feed this monthly
-              report workspace. Report sections remain placeholders in Slice 11B.
+              report workspace, then review the source readiness for each report section.
             </p>
           </div>
           <Link
@@ -170,7 +199,10 @@ export default async function MonthlyReportPage({
 
         <TraceabilityCard calculationRun={selectedRun} />
 
-        <ReportOutline available={Boolean(selectedRun)} />
+        <ReportOutline
+          calculationRun={selectedRun}
+          sourceAvailability={sourceAvailability}
+        />
       </section>
     </AppShell>
   );
@@ -420,45 +452,105 @@ function TraceabilityCard({
   );
 }
 
-function ReportOutline({ available }: { available: boolean }) {
-  return (
-    <Card>
-      <CardHeader>
-        <p className="text-sm font-medium text-primary">Report Outline</p>
-        <CardTitle>Placeholder Monthly Report Sections</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 md:grid-cols-2">
-          {reportSections.map((section) => (
-            <div
-              className="rounded-md border border-dashed border-border bg-muted/20 p-4"
-              key={section.title}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-semibold text-foreground">
-                  {section.title}
-                </h2>
-                <span className="rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  {available ? "Placeholder" : "Unavailable"}
-                </span>
-              </div>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                {section.purpose}
-              </p>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                {section.note}
-              </p>
-              <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {available
-                  ? "Not built in Slice 11B"
-                  : "Requires an eligible governed calculation run"}
-              </p>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+function ReportOutline({
+  calculationRun,
+  sourceAvailability
+}: {
+  calculationRun: CalculationRun | null;
+  sourceAvailability: ReportSourceAvailability;
+}) {
+  const traceabilityAvailable = Boolean(
+    calculationRun &&
+      (calculationRun.calculation_version ||
+        calculationRun.dependency_manifest ||
+        calculationRun.source_import_batch_ids?.length ||
+        calculationRun.posting_run_ids?.length ||
+        calculationRun.validation_run_ids?.length)
   );
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-primary">Report Outline</p>
+        <h2 className="text-2xl font-semibold text-foreground">
+          Monthly Finance Report Structure
+        </h2>
+        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+          Each section below is governed by the calculation run selected above.
+          Full report content remains intentionally deferred to later Slice 11 builds.
+        </p>
+      </div>
+
+      {reportSections.map((section, index) => {
+        const sourceAvailable = sourceAvailability[section.availabilityKey];
+        const status = getReportSectionStatus({
+          calculationRun,
+          sourceAvailable
+        });
+
+        return (
+          <MonthlyReportSection
+            calculationRunId={calculationRun?.calculation_run_id}
+            key={section.title}
+            purpose={section.purpose}
+            sectionId={`monthly-report-section-${index + 1}`}
+            sourceNote={formatSectionSourceNote({
+              calculationRun,
+              sourceAvailable,
+              sourceLabel: section.sourceLabel
+            })}
+            status={status}
+            title={section.title}
+          />
+        );
+      })}
+
+      <MonthlyReportSection
+        calculationRunId={calculationRun?.calculation_run_id}
+        purpose="Show the calculation run, source batches, posting runs, and validation runs behind the report."
+        sectionId="monthly-report-section-traceability"
+        sourceNote={formatSectionSourceNote({
+          calculationRun,
+          sourceAvailable: traceabilityAvailable,
+          sourceLabel: "calculation run lineage and dependency metadata"
+        })}
+        status={getReportSectionStatus({
+          calculationRun,
+          sourceAvailable: traceabilityAvailable
+        })}
+        title="Traceability"
+      />
+    </div>
+  );
+}
+
+function getReportSectionStatus({
+  calculationRun,
+  sourceAvailable
+}: {
+  calculationRun: CalculationRun | null;
+  sourceAvailable: boolean;
+}): MonthlyReportSectionStatus {
+  if (!calculationRun) return "blocked";
+  return sourceAvailable ? "ready" : "no_data";
+}
+
+function formatSectionSourceNote({
+  calculationRun,
+  sourceAvailable,
+  sourceLabel
+}: {
+  calculationRun: CalculationRun | null;
+  sourceAvailable: boolean;
+  sourceLabel: string;
+}) {
+  if (!calculationRun) {
+    return `Requires ${sourceLabel} from an eligible selected calculation run.`;
+  }
+
+  return sourceAvailable
+    ? `Source available: ${sourceLabel}.`
+    : `Source unavailable: ${sourceLabel} was not found for the selected calculation run.`;
 }
 
 function Select({
@@ -646,6 +738,104 @@ async function loadReadinessCounts({
     critical: criticalExceptions + criticalMapping,
     warning: warningExceptions + warningMapping
   };
+}
+
+async function loadReportSourceAvailability({
+  adminClient,
+  calculationRunId,
+  organizationId
+}: {
+  adminClient: SupabaseClient;
+  calculationRunId: string;
+  organizationId: string;
+}): Promise<ReportSourceAvailability> {
+  const [
+    dashboardFacts,
+    fundFacts,
+    departmentFunctionFacts,
+    statementSummaries,
+    variances
+  ] = await Promise.all([
+    hasRows(
+      adminClient
+        .from("dashboard_financial_facts")
+        .select("dashboard_financial_fact_id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("calculation_run_id", calculationRunId)
+    ),
+    hasRows(
+      adminClient
+        .from("dashboard_financial_facts")
+        .select("dashboard_financial_fact_id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("calculation_run_id", calculationRunId)
+        .in("summary_type", [
+          "dashboard_detail",
+          "fund",
+          "fund_account_type",
+          "fund_activity_statement_line",
+          "fund_balance_sheet_line"
+        ])
+    ),
+    hasRows(
+      adminClient
+        .from("dashboard_financial_facts")
+        .select("dashboard_financial_fact_id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("calculation_run_id", calculationRunId)
+        .in("summary_type", [
+          "dashboard_detail",
+          "department",
+          "department_account_type",
+          "department_activity_statement_line",
+          "department_balance_sheet_line",
+          "function",
+          "function_account_type",
+          "function_activity_statement_line",
+          "function_balance_sheet_line"
+        ])
+    ),
+    hasRows(
+      adminClient
+        .from("statement_summary_results")
+        .select("statement_summary_result_id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("calculation_run_id", calculationRunId)
+    ),
+    hasRows(
+      adminClient
+        .from("variance_results")
+        .select("variance_result_id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("calculation_run_id", calculationRunId)
+    )
+  ]);
+
+  return {
+    dashboardSummary: dashboardFacts || statementSummaries,
+    departmentFunctionFacts,
+    exceptionsAndReadiness: true,
+    fundFacts,
+    statementSummaries,
+    variances
+  };
+}
+
+function emptyReportSourceAvailability(): ReportSourceAvailability {
+  return {
+    dashboardSummary: false,
+    departmentFunctionFacts: false,
+    exceptionsAndReadiness: false,
+    fundFacts: false,
+    statementSummaries: false,
+    variances: false
+  };
+}
+
+async function hasRows(
+  query: PromiseLike<{ count: number | null; error: { message: string } | null }>
+) {
+  return (await countRows(query)) > 0;
 }
 
 async function countRows(query: PromiseLike<{ count: number | null; error: { message: string } | null }>) {
